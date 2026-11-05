@@ -1,6 +1,6 @@
 import { addDays, iso, utc, weekday, type ISODate } from './dates'
 import { legalHolidays, observances, type Holiday, type Observance, type Region } from './holidays'
-import { schoolBreakOn, type SchoolBreak } from './schoolBreaks'
+import { crowd, type SchoolBreak } from './schoolBreaks'
 
 /** How the company treats Heiligabend and Silvester when they fall on a weekday. */
 export type EveRule = 'full' | 'half' | 'off'
@@ -36,6 +36,10 @@ export interface Day {
   observance?: Observance
   /** Schulferien at home, for reference only. */
   schoolBreak?: SchoolBreak
+  /** Länder with school breaks on this day. */
+  onBreak: Region[]
+  /** Share of Germany's population in those Länder, 0–1: how busy travel gets. */
+  crowd: number
 }
 
 const EVE_COST: Record<EveRule, number> = { full: 1, half: 0.5, off: 0 }
@@ -69,6 +73,8 @@ export function buildYear(
       if (eves === 'off') kind = 'company'
     }
 
+    const current = breaks.filter((b) => b.start <= date && date <= b.end)
+    const onBreak = [...new Set(current.flatMap((b) => b.regions))]
     days.push({
       date,
       month: d.getUTCMonth(),
@@ -79,7 +85,9 @@ export function buildYear(
       holiday: local,
       elsewhere: h && !local && h.regions.includes(home) ? h : undefined,
       observance: notable.get(date),
-      schoolBreak: schoolBreakOn(breaks, date),
+      schoolBreak: current.find((b) => b.regions.includes(home)),
+      onBreak,
+      crowd: crowd(onBreak),
     })
   }
   return days

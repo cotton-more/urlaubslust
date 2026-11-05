@@ -1,32 +1,31 @@
 import { useEffect, useState } from 'react'
-import type { Region } from './domain/holidays'
 import { parseSchoolBreaks, schoolBreaksURL, type SchoolBreak } from './domain/schoolBreaks'
 
 export type BreaksStatus = 'loading' | 'ready' | 'failed'
 
-const cacheKey = (region: Region, year: number) => `urlaub:ferien:${region}:${year}`
+const cacheKey = (year: number) => `urlaub:ferien:DE:${year}`
 
-function cached(region: Region, year: number): SchoolBreak[] | null {
+function cached(year: number): SchoolBreak[] | null {
   try {
-    return parseSchoolBreaks(JSON.parse(localStorage.getItem(cacheKey(region, year)) ?? 'null'))
+    return parseSchoolBreaks(JSON.parse(localStorage.getItem(cacheKey(year)) ?? 'null'))
   } catch {
     return null
   }
 }
 
 /**
- * School breaks of a Bundesland for a year, from OpenHolidays. A cached copy shows at once and offline;
+ * School breaks of every Bundesland for a year, from OpenHolidays. A cached copy shows at once and offline;
  * the API is asked again every time, since dates for later years get published and corrected.
  */
-export function useSchoolBreaks(region: Region, year: number) {
+export function useSchoolBreaks(year: number) {
   const [result, setResult] = useState<{ key: string; breaks: SchoolBreak[]; status: BreaksStatus } | null>(null)
-  const key = cacheKey(region, year)
+  const key = cacheKey(year)
 
   useEffect(() => {
     let current = true
-    const copy = cached(region, year)
+    const copy = cached(year)
     setResult({ key, breaks: copy ?? [], status: copy ? 'ready' : 'loading' })
-    fetch(schoolBreaksURL(region, year))
+    fetch(schoolBreaksURL(year))
       .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
       .then((raw) => {
         const breaks = parseSchoolBreaks(raw)
@@ -41,7 +40,7 @@ export function useSchoolBreaks(region: Region, year: number) {
     return () => {
       current = false
     }
-  }, [key, region, year])
+  }, [key, year])
 
   return result?.key === key ? result : { key, breaks: [], status: 'loading' as const }
 }

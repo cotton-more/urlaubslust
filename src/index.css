@@ -28,6 +28,13 @@
   --color-mist-500: #4f8fd0;
   --color-berry-400: #e5737a;
   --color-berry-600: #c0444f;
+
+  /* Crowd: one hue, light → dark, for the share of Germany on school breaks. Dark text on 1–4, white on 5. */
+  --color-crowd-1: #efe9fc;
+  --color-crowd-2: #ddd0f8;
+  --color-crowd-3: #c2adf1;
+  --color-crowd-4: #a48ae4;
+  --color-crowd-5: #6f4fc7;
 }
 
 html {

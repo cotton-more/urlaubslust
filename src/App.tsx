@@ -2,13 +2,14 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode
 import { buildYear, isOff, type Day } from './domain/calendar'
 import type { ISODate } from './domain/dates'
 import { REGIONS } from './domain/holidays'
-import type { SchoolBreak } from './domain/schoolBreaks'
+import { POPULATION, type SchoolBreak } from './domain/schoolBreaks'
 import { toICS } from './domain/ics'
 import { bridgeDays, trips, usage, workdaysBetween, type Trip } from './domain/plan'
 import { dayLabel, days as daysWord, rangeLabel } from './format'
 import { usePlan, type Years } from './usePlan'
 import { useSchoolBreaks, type BreaksStatus } from './useSchoolBreaks'
-import { MonthCard } from './components/MonthCard'
+import { CROWD_STEPS, MonthCard, type View } from './components/MonthCard'
+import { Segmented } from './components/controls'
 import { Summary } from './components/Summary'
 import { SettingsPanel } from './components/SettingsPanel'
 import { BridgeTips, TripList } from './components/TripList'
@@ -18,10 +19,11 @@ export default function App() {
   const { year, setYear, years, plan, saved, replaceAll, setSettings, book, clear } = usePlan()
   const { settings } = plan
   const [hovered, setHovered] = useState<Day | null>(null)
+  const [view, setView] = useState<View>('plan')
   const drag = useRef<boolean | null>(null)
   const anchor = useRef<ISODate | null>(null)
 
-  const schoolBreaks = useSchoolBreaks(settings.home, year)
+  const schoolBreaks = useSchoolBreaks(year)
   const days = useMemo(
     () => buildYear(year, settings, schoolBreaks.breaks),
     [year, settings.work, settings.home, settings.eves, schoolBreaks.breaks],
@@ -29,6 +31,10 @@ export default function App() {
   const booked = useMemo(() => new Set(plan.booked), [plan.booked])
   const tripList = useMemo(() => trips(days, booked), [days, booked])
   const stats = usage(days, booked, settings)
+  const crowdOf = (trip: Trip) => {
+    const span = days.filter((d) => d.date >= trip.start && d.date <= trip.end)
+    return span.reduce((sum, d) => sum + d.crowd, 0) / span.length
+  }
   const covered = useMemo(() => {
     const inTrips = new Set<ISODate>()
     for (const t of tripList) for (const d of days) if (d.date >= t.start && d.date <= t.end && isOff(d)) inTrips.add(d.date)
@@ -119,7 +125,7 @@ export default function App() {
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <main>
-            <Legend home={settings.home} />
+            <Legend home={settings.home} view={view} onView={setView} />
             <div
               className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
               onPointerLeave={() => setHovered(null)}
@@ -127,6 +133,7 @@ export default function App() {
               {Array.from({ length: 12 }, (_, month) => (
                 <MonthCard
                   key={month}
+                  view={view}
                   year={year}
                   month={month}
                   days={days.filter((d) => d.month === month)}
@@ -145,7 +152,7 @@ export default function App() {
             <Summary year={year} usage={stats} daysOff={daysOff} tripCount={tripList.length} />
             <SettingsPanel year={year} settings={settings} onChange={setSettings} />
             <Section title="Периоды отпуска">
-              <TripList trips={tripList} onRemove={removeTrip} />
+              <TripList trips={tripList} crowdOf={crowdOf} onRemove={removeTrip} />
               {tripList.length > 0 && (
                 <div className="grid gap-2">
                   <button
@@ -166,7 +173,12 @@ export default function App() {
               <TransferPanel years={years} onImport={replaceAll} />
             </Section>
             <Section title={`Школьные каникулы · ${settings.home}`}>
-              <SchoolBreaks year={year} region={REGIONS[settings.home]} {...schoolBreaks} />
+              <SchoolBreaks
+                year={year}
+                region={REGIONS[settings.home]}
+                status={schoolBreaks.status}
+                breaks={schoolBreaks.breaks.filter((b) => b.regions.includes(settings.home))}
+              />
             </Section>
             {tips.length > 0 && (
               <Section title="Brückentage">
@@ -254,7 +266,7 @@ function SchoolBreaks({ year, region, breaks, status }: SchoolBreaksProps) {
   )
 }
 
-function Legend({ home }: { home: string }) {
+function Legend({ home, view, onView }: { home: string; view: View; onView: (view: View) => void }) {
   const items: [string, string][] = [
     ['bg-linear-to-br from-blush-600 to-peach-600', 'отпуск'],
     ['bg-blush-100 ring-1 ring-inset ring-blush-200', 'выходные внутри отпуска'],
@@ -265,13 +277,43 @@ function Legend({ home }: { home: string }) {
     ['bg-lilac-500/55 !h-[3px] !w-3 rounded-full', `школьные каникулы ${home}`],
   ]
   return (
-    <div className="mb-5 flex flex-wrap gap-x-5 gap-y-2 px-1 text-xs text-stone-500">
-      {items.map(([swatch, label]) => (
-        <span key={label} className="flex items-center gap-2">
-          <span className={`size-3 rounded ${swatch}`} />
-          {label}
-        </span>
-      ))}
+    <div className="mb-5 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 px-1 text-xs text-stone-500">
+      {view === 'plan' ? (
+        <div className="flex flex-wrap gap-x-5 gap-y-2">
+          {items.map(([swatch, label]) => (
+            <span key={label} className="flex items-center gap-2">
+              <span className={`size-3 rounded ${swatch}`} />
+              {label}
+            </span>
+          ))}
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <span>Какая доля Германии на школьных каникулах (по населению земель):</span>
+          <span className="flex items-center gap-1">
+            {CROWD_STEPS.map((step, i) => (
+              <span key={step} className="grid justify-items-center gap-1">
+                <span className={`h-3 w-8 rounded ${step} ring-1 ring-stone-200 ring-inset`} />
+                <span className="text-[10px] tabular-nums">{i === 0 ? '0' : `≤${i * 20}%`}</span>
+              </span>
+            ))}
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="size-3 rounded ring-2 ring-blush-600 ring-inset" />
+            отпуск
+          </span>
+        </div>
+      )}
+      <div className="w-64">
+        <Segmented<View>
+          value={view}
+          options={[
+            ['plan', 'план'],
+            ['crowd', 'загруженность'],
+          ]}
+          onChange={onView}
+        />
+      </div>
     </div>
   )
 }
@@ -287,6 +329,11 @@ function HoverBar({ day, booked, work, home }: { day: Day | null; booked: boolea
     if (day.elsewhere) lines.push(`${day.elsewhere.name} — праздник дома (${home}), но не на работе`)
     if (day.observance && !day.holiday) lines.push(`${day.observance.name}: ${day.observance.note}`)
     if (day.schoolBreak) lines.push(`${day.schoolBreak.name} в школах ${home}`)
+    if (day.onBreak.length === 16) lines.push('каникулы во всех землях')
+    else if (day.onBreak.length > 0) {
+      const regions = [...day.onBreak].sort((a, b) => POPULATION[b] - POPULATION[a]).join(', ')
+      lines.push(`каникулы у ${Math.round(day.crowd * 100)}% Германии: ${regions}`)
+    }
   }
   return (
     <div

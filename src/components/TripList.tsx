@@ -1,13 +1,16 @@
 import type { Day } from '../domain/calendar'
 import type { Trip } from '../domain/plan'
 import { dayLabel, days, rangeLabel } from '../format'
+import { CROWD_STEPS, crowdStep } from './MonthCard'
 
 interface TripsProps {
   trips: readonly Trip[]
+  /** Average share of Germany on school breaks over the trip, 0–1. */
+  crowdOf: (trip: Trip) => number
   onRemove: (trip: Trip) => void
 }
 
-export function TripList({ trips, onRemove }: TripsProps) {
+export function TripList({ trips, crowdOf, onRemove }: TripsProps) {
   if (trips.length === 0)
     return (
       <p className="rounded-3xl border border-dashed border-stone-300 px-5 py-6 text-center text-sm text-stone-500">
@@ -26,6 +29,10 @@ export function TripList({ trips, onRemove }: TripsProps) {
             <div className="truncate text-sm font-semibold">{rangeLabel(trip.start, trip.end)}</div>
             <div className="text-xs text-stone-500">
               {days(trip.cost)} отпуска → <span className="font-medium text-blush-600">{days(trip.length)} свободы</span>
+            </div>
+            <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-stone-500">
+              <span className={`size-2 rounded-sm ring-1 ring-stone-200 ring-inset ${CROWD_STEPS[crowdStep(crowdOf(trip))]}`} />
+              на каникулах в среднем {Math.round(crowdOf(trip) * 100)}% Германии
             </div>
           </div>
           <button

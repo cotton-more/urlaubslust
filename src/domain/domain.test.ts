@@ -2,17 +2,18 @@ import { describe, expect, it } from 'vitest'
 import { iso } from './dates'
 import { easterSunday, legalHolidays } from './holidays'
 import { buildYear, type Settings } from './calendar'
+import type { Region } from './holidays'
 import { bridgeDays, trips, usage, workdaysBetween } from './plan'
 import { toICS } from './ics'
 import { blankPlan, decodePlans, encodePlans } from '../usePlan'
-import { parseSchoolBreaks, schoolBreaksURL } from './schoolBreaks'
+import { crowd, parseSchoolBreaks, schoolBreaksURL } from './schoolBreaks'
 
 const settings: Settings = { work: 'HE', home: 'RP', entitlement: 30, carryover: 0, eves: 'full' }
 const RLP_BREAKS_2027 = [
-  { name: 'Weihnachtsferien', start: '2026-12-23', end: '2027-01-08' },
-  { name: 'Osterferien', start: '2027-03-22', end: '2027-04-02' },
-  { name: 'Sommerferien', start: '2027-06-28', end: '2027-08-06' },
-  { name: 'Weihnachtsferien', start: '2027-12-23', end: '2028-01-07' },
+  { name: 'Weihnachtsferien', start: '2026-12-23', end: '2027-01-08', regions: ['RP'] as Region[] },
+  { name: 'Osterferien', start: '2027-03-22', end: '2027-04-02', regions: ['RP'] as Region[] },
+  { name: 'Sommerferien', start: '2027-06-28', end: '2027-08-06', regions: ['RP'] as Region[] },
+  { name: 'Weihnachtsferien', start: '2027-12-23', end: '2028-01-07', regions: ['RP'] as Region[] },
 ]
 const hessen = buildYear(2027, settings, RLP_BREAKS_2027)
 const day = (date: string, days = hessen) => days.find((d) => d.date === date)!
@@ -167,23 +168,52 @@ describe('plan code', () => {
 })
 
 describe('school breaks', () => {
-  it('asks OpenHolidays for one Bundesland and year', () => {
-    expect(schoolBreaksURL('RP', 2028)).toBe(
-      'https://openholidaysapi.org/SchoolHolidays?countryIsoCode=DE&subdivisionCode=DE-RP&languageIsoCode=DE&validFrom=2028-01-01&validTo=2028-12-31',
+  it('asks OpenHolidays for every Bundesland in one year', () => {
+    expect(schoolBreaksURL(2028)).toBe(
+      'https://openholidaysapi.org/SchoolHolidays?countryIsoCode=DE&languageIsoCode=DE&validFrom=2028-01-01&validTo=2028-12-31',
     )
   })
 
-  it('reads an OpenHolidays response', () => {
+  it('reads an OpenHolidays response, keeping allgemeinbildende Schulen where a Land splits by school type', () => {
+    const entry = (startDate: string, endDate: string, text: string, codes: string[], groups?: string[]) => ({
+      startDate,
+      endDate,
+      name: [{ language: 'EN', text: 'Holidays' }, { language: 'DE', text }],
+      subdivisions: codes.map((code) => ({ code })),
+      ...(groups && { groups: groups.map((code) => ({ code })) }),
+    })
     const raw = [
-      { startDate: '2028-04-10', endDate: '2028-04-21', name: [{ language: 'EN', text: 'Easter' }, { language: 'DE', text: 'Osterferien' }] },
-      { startDate: '2027-12-23', endDate: '2028-01-07', name: [{ language: 'DE', text: 'Weihnachtsferien' }] },
-      { startDate: 'soon', endDate: '2028-01-07', name: [] },
+      entry('2028-04-10', '2028-04-21', 'Osterferien', ['DE-RP', 'DE-SL']),
+      entry('2027-12-23', '2028-01-07', 'Weihnachtsferien', ['DE-RP']),
+      entry('2028-07-10', '2028-08-19', 'Sommerferien', ['DE-MV'], ['DE-MV-ABS']),
+      entry('2028-07-17', '2028-08-26', 'Sommerferien', ['DE-MV'], ['DE-MV-BBS']),
+      entry('soon', '2028-01-07', 'Kaputt', ['DE-RP']),
+      entry('2028-01-01', '2028-01-07', 'Nirgends', ['DE-XX']),
     ]
     expect(parseSchoolBreaks(raw)).toEqual([
-      { name: 'Weihnachtsferien', start: '2027-12-23', end: '2028-01-07' },
-      { name: 'Osterferien', start: '2028-04-10', end: '2028-04-21' },
+      { name: 'Weihnachtsferien', start: '2027-12-23', end: '2028-01-07', regions: ['RP'] },
+      { name: 'Osterferien', start: '2028-04-10', end: '2028-04-21', regions: ['RP', 'SL'] },
+      { name: 'Sommerferien', start: '2028-07-10', end: '2028-08-19', regions: ['MV'] },
     ])
     expect(() => parseSchoolBreaks({ error: 'nope' })).toThrow()
+  })
+
+  it('weighs the Länder on break by population', () => {
+    expect(crowd([])).toBe(0)
+    expect(crowd(['BW', 'BY', 'BE', 'BB', 'HB', 'HH', 'HE', 'MV', 'NI', 'NW', 'RP', 'SL', 'SN', 'ST', 'SH', 'TH'])).toBeCloseTo(1)
+    expect(crowd(['NW'])).toBeCloseTo(0.215, 2)
+  })
+
+  it('tells each day who is on break, and which break is at home', () => {
+    const breaks = [
+      { name: 'Sommerferien', start: '2027-06-28', end: '2027-08-06', regions: ['RP', 'SL'] as Region[] },
+      { name: 'Sommerferien', start: '2027-07-22', end: '2027-09-01', regions: ['NW'] as Region[] },
+    ]
+    const days = buildYear(2027, settings, breaks)
+    expect(day('2027-07-01', days)).toMatchObject({ onBreak: ['RP', 'SL'], schoolBreak: { name: 'Sommerferien' } })
+    expect(day('2027-08-02', days).onBreak).toEqual(['RP', 'SL', 'NW'])
+    expect(day('2027-08-20', days)).toMatchObject({ onBreak: ['NW'], schoolBreak: undefined })
+    expect(day('2027-08-20', days).crowd).toBeCloseTo(crowd(['NW']))
   })
 })
 

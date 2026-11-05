@@ -3,7 +3,15 @@ import type { Day } from '../domain/calendar'
 import type { ISODate } from '../domain/dates'
 import { WEEKDAYS, monthName } from '../format'
 
+/** What the cells show: the vacation plan, or how much of Germany is on school breaks. */
+export type View = 'plan' | 'crowd'
+
+/** Crowd fill per fifth of the population, 0 = nobody on break. */
+export const CROWD_STEPS = ['bg-white/50', 'bg-crowd-1', 'bg-crowd-2', 'bg-crowd-3', 'bg-crowd-4', 'bg-crowd-5'] as const
+export const crowdStep = (share: number) => (share <= 0 ? 0 : Math.min(5, Math.ceil(share * 5)))
+
 interface Props {
+  view: View
   year: number
   month: number
   days: readonly Day[]
@@ -26,7 +34,14 @@ function cellClass(day: Day, booked: boolean, covered: boolean): string {
   return 'text-stone-700 hover:bg-blush-100 hover:text-blush-700 cursor-pointer'
 }
 
-export function MonthCard({ year, month, days, booked, covered, bridges, onPress, onEnter, onKeyToggle }: Props) {
+function crowdClass(day: Day, inTrip: boolean): string {
+  const step = crowdStep(day.crowd)
+  const ink = step === 5 ? 'text-white' : day.kind === 'workday' ? 'text-stone-800' : step >= 3 ? 'text-stone-700' : 'text-stone-500'
+  const trip = inTrip ? 'ring-2 ring-inset ring-blush-600 font-bold' : ''
+  return `${CROWD_STEPS[step]} ${ink} ${trip} ${day.kind === 'workday' ? 'cursor-pointer' : ''}`
+}
+
+export function MonthCard({ view, year, month, days, booked, covered, bridges, onPress, onEnter, onKeyToggle }: Props) {
   const bookedHere = days.filter((d) => d.kind === 'workday' && booked.has(d.date)).reduce((s, d) => s + d.cost, 0)
   return (
     <section className="rounded-3xl border border-white bg-white/70 p-4 shadow-sm shadow-stone-900/5 backdrop-blur-xl transition hover:shadow-md">
@@ -50,6 +65,10 @@ export function MonthCard({ year, month, days, booked, covered, bridges, onPress
         {days.map((day) => {
           const isBooked = booked.has(day.date)
           const clickable = day.kind === 'workday'
+          const plan = view === 'plan'
+          const look = plan
+            ? `${cellClass(day, isBooked, covered.has(day.date))} ${day.elsewhere ? 'outline-1 outline-offset-[-3px] outline-dashed outline-butter-500' : ''}`
+            : crowdClass(day, (clickable && isBooked) || covered.has(day.date))
           return (
             <button
               key={day.date}
@@ -60,19 +79,19 @@ export function MonthCard({ year, month, days, booked, covered, bridges, onPress
               onPointerDown={(e) => onPress(day, e)}
               onPointerEnter={() => onEnter(day)}
               onClick={(e) => e.detail === 0 && clickable && onKeyToggle(day)}
-              className={`relative grid aspect-square place-items-center rounded-xl text-[13px] tabular-nums outline-none transition duration-150 select-none focus-visible:ring-2 focus-visible:ring-blush-300 ${cellClass(day, isBooked, covered.has(day.date))} ${day.elsewhere ? 'outline-1 outline-offset-[-3px] outline-dashed outline-butter-500' : ''} ${clickable ? '' : 'cursor-default'}`}
+              className={`relative grid aspect-square place-items-center rounded-xl text-[13px] tabular-nums outline-none transition duration-150 select-none focus-visible:ring-2 focus-visible:ring-blush-300 ${look} ${clickable ? '' : 'cursor-default'}`}
             >
               {day.dayOfMonth}
               {day.kind === 'workday' && day.cost < 1 && (
-                <span className={`absolute top-0.5 right-1 text-[8px] font-bold ${isBooked ? 'text-white/85' : 'text-butter-800'}`}>½</span>
+                <span className={`absolute top-0.5 right-1 text-[8px] font-bold ${isBooked && plan ? 'text-white/85' : 'text-butter-800'}`}>½</span>
               )}
-              {day.observance && !day.holiday && (
+              {plan && day.observance && !day.holiday && (
                 <span className="absolute top-1 left-1 size-1 rounded-full bg-mist-500" />
               )}
-              {day.schoolBreak && (
+              {plan && day.schoolBreak && (
                 <span className={`absolute inset-x-1.5 bottom-0.5 h-[3px] rounded-full ${isBooked ? 'bg-white/80' : 'bg-lilac-500/55'}`} />
               )}
-              {bridges.has(day.date) && !isBooked && (
+              {plan && bridges.has(day.date) && !isBooked && (
                 <span className="absolute bottom-1.5 size-1 rounded-full bg-butter-500 shadow-[0_0_6px] shadow-butter-500/50" />
               )}
             </button>
