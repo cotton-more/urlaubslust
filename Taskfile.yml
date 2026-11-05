@@ -1,0 +1,44 @@
+# Everyday commands (https://taskfile.dev): `task` lists them, `task <name>` runs one.
+version: '3'
+
+vars:
+  URL: http://localhost:5273
+
+tasks:
+  default:
+    silent: true
+    cmds:
+      - task --list
+
+  install:
+    desc: Install dependencies (skipped while package-lock.json is unchanged)
+    sources: [package.json, package-lock.json]
+    generates: [node_modules/.package-lock.json]
+    cmds:
+      - npm install
+
+  dev:
+    desc: The planner at {{.URL}} with hot reload, opens the browser (Ctrl+C stops it)
+    deps: [install]
+    cmds:
+      - npx vite --open
+
+  start:
+    desc: Production build served at {{.URL}}, opens the browser (Ctrl+C stops it)
+    deps: [install]
+    cmds:
+      - npm run build
+      - npx vite preview --open
+
+  test:
+    desc: Holiday and vacation-day calculations
+    deps: [install]
+    cmds:
+      - npx vitest run
+
+  check:
+    desc: Type check and tests, before changing anything
+    deps: [install]
+    cmds:
+      - npx tsc --noEmit
+      - task: test

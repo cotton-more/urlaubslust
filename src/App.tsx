@@ -1,0 +1,265 @@
+import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react'
+import { buildYear, isOff, type Day } from './domain/calendar'
+import type { ISODate } from './domain/dates'
+import { REGIONS } from './domain/holidays'
+import { SCHOOL_BREAKS_RLP } from './domain/schoolBreaks'
+import { toICS } from './domain/ics'
+import { bridgeDays, trips, usage, workdaysBetween, type Trip } from './domain/plan'
+import { dayLabel, days as daysWord, rangeLabel } from './format'
+import { usePlan } from './usePlan'
+import { MonthCard } from './components/MonthCard'
+import { Summary } from './components/Summary'
+import { SettingsPanel } from './components/SettingsPanel'
+import { BridgeTips, TripList } from './components/TripList'
+import { TransferPanel } from './components/TransferPanel'
+
+const YEAR = 2027
+
+export default function App() {
+  const { plan, saved, replace, setSettings, book, clear } = usePlan()
+  const { settings } = plan
+  const [hovered, setHovered] = useState<Day | null>(null)
+  const drag = useRef<boolean | null>(null)
+  const anchor = useRef<ISODate | null>(null)
+
+  const days = useMemo(() => buildYear(YEAR, settings), [settings.region, settings.eves])
+  const booked = useMemo(() => new Set(plan.booked), [plan.booked])
+  const tripList = useMemo(() => trips(days, booked), [days, booked])
+  const stats = usage(days, booked, settings)
+  const covered = useMemo(() => {
+    const inTrips = new Set<ISODate>()
+    for (const t of tripList) for (const d of days) if (d.date >= t.start && d.date <= t.end && isOff(d)) inTrips.add(d.date)
+    return inTrips
+  }, [days, tripList])
+  const bridges = useMemo(() => bridgeDays(days), [days])
+  const bridgeDates = useMemo(() => new Set(bridges.map((d) => d.date)), [bridges])
+  const tips = useMemo(
+    () =>
+      bridges
+        .filter((d) => !booked.has(d.date))
+        .map((day) => {
+          const i = days.indexOf(day)
+          const neighbour = [days[i - 1], days[i + 1]].find((d) => d.holiday || d.kind === 'company')
+          const gain = trips(days, new Set([day.date])).find((t) => t.start <= day.date && t.end >= day.date)!.length
+          return { day, gain, reason: neighbour?.holiday?.name ?? neighbour?.observance?.name ?? 'мост' }
+        }),
+    [bridges, booked, days],
+  )
+
+  useEffect(() => {
+    const stop = () => (drag.current = null)
+    window.addEventListener('pointerup', stop)
+    window.addEventListener('pointercancel', stop)
+    return () => {
+      window.removeEventListener('pointerup', stop)
+      window.removeEventListener('pointercancel', stop)
+    }
+  }, [])
+
+  const press = (day: Day, event: PointerEvent) => {
+    if (isOff(day) || event.button !== 0) return
+    event.preventDefault()
+    const on = !booked.has(day.date)
+    book(event.shiftKey && anchor.current ? workdaysBetween(days, anchor.current, day.date) : [day.date], on)
+    anchor.current = day.date
+    drag.current = on
+  }
+  const enter = (day: Day) => {
+    setHovered(day)
+    if (drag.current !== null && !isOff(day)) book([day.date], drag.current)
+  }
+  const removeTrip = (trip: Trip) => book(trip.booked, false)
+  const exportICS = () => {
+    const url = URL.createObjectURL(new Blob([toICS(tripList, YEAR, new Date())], { type: 'text/calendar;charset=utf-8' }))
+    const link = Object.assign(document.createElement('a'), { href: url, download: `urlaub-${YEAR}.ics` })
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+  const daysOff = tripList.reduce((sum, t) => sum + t.length, 0)
+
+  return (
+    <div className="relative min-h-screen overflow-x-hidden">
+      <div aria-hidden className="pointer-events-none fixed inset-0">
+        <div className="absolute -top-40 -left-32 size-[34rem] rounded-full bg-blush-200/50 blur-[120px]" />
+        <div className="absolute top-1/3 -right-40 size-[30rem] rounded-full bg-peach-200/50 blur-[120px]" />
+        <div className="absolute -bottom-40 left-1/3 size-[30rem] rounded-full bg-lilac-200/50 blur-[120px]" />
+      </div>
+
+      <div className="relative mx-auto max-w-[1600px] px-4 py-8 sm:px-8">
+        <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="mb-2 text-xs font-semibold tracking-[0.3em] text-stone-500 uppercase">
+              {REGIONS[settings.region].city} · {REGIONS[settings.region].state}
+            </p>
+            <h1 className="font-display text-4xl font-bold tracking-tight sm:text-5xl">
+              Отпуск{' '}
+              <span className="bg-linear-to-r from-blush-600 to-peach-600 bg-clip-text text-transparent">{YEAR}</span>
+            </h1>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-2 rounded-full border border-stone-200 bg-white/70 px-3 py-1.5 text-xs text-stone-500">
+              <span className={`size-1.5 rounded-full ${saved ? 'bg-sage-400' : 'bg-berry-400'}`} />
+              {saved ? 'сохранено в браузере' : 'не сохраняется'}
+            </span>
+            {plan.booked.length > 0 && (
+              <button
+                type="button"
+                onClick={() => confirm('Сбросить все отмеченные дни?') && clear()}
+                className="rounded-full border border-stone-200 bg-white/70 px-3 py-1.5 text-xs text-stone-500 transition hover:border-berry-400/50 hover:text-berry-600"
+              >
+                сбросить всё
+              </button>
+            )}
+          </div>
+        </header>
+
+        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <main>
+            <Legend />
+            <div
+              className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
+              onPointerLeave={() => setHovered(null)}
+            >
+              {Array.from({ length: 12 }, (_, month) => (
+                <MonthCard
+                  key={month}
+                  year={YEAR}
+                  month={month}
+                  days={days.filter((d) => d.month === month)}
+                  booked={booked}
+                  covered={covered}
+                  bridges={bridgeDates}
+                  onPress={press}
+                  onEnter={enter}
+                  onKeyToggle={(day) => book([day.date], !booked.has(day.date))}
+                />
+              ))}
+            </div>
+          </main>
+
+          <aside className="order-first grid min-w-0 grid-cols-1 content-start gap-6 xl:order-none xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:overflow-y-auto xl:pb-4 [scrollbar-width:none]">
+            <Summary usage={stats} daysOff={daysOff} tripCount={tripList.length} />
+            <SettingsPanel settings={settings} onChange={setSettings} />
+            <Section title="Периоды отпуска">
+              <TripList trips={tripList} onRemove={removeTrip} />
+              {tripList.length > 0 && (
+                <div className="grid gap-2">
+                  <button
+                    type="button"
+                    onClick={exportICS}
+                    className="flex items-center justify-center gap-2 rounded-2xl bg-linear-to-r from-blush-600 to-peach-600 px-4 py-3 text-sm font-semibold text-white shadow-md shadow-blush-600/25 transition hover:shadow-blush-600/40 active:scale-[0.98]"
+                  >
+                    <span aria-hidden>📅</span> Скачать для календаря (.ics)
+                  </button>
+                  <p className="px-1 text-xs leading-relaxed text-stone-500">
+                    Google Календарь → ⚙ Настройки → Импорт и экспорт → выбрать файл. Удобно импортировать в отдельный
+                    календарь «Отпуск» — его легко очистить и залить заново.
+                  </p>
+                </div>
+              )}
+            </Section>
+            <Section title="Другое устройство">
+              <TransferPanel plan={plan} onImport={replace} />
+            </Section>
+            <Section title="Школьные каникулы RLP">
+              <SchoolBreaks />
+            </Section>
+            {tips.length > 0 && (
+              <Section title="Brückentage">
+                <BridgeTips tips={tips} onTake={(day) => book([day.date], true)} />
+              </Section>
+            )}
+          </aside>
+        </div>
+      </div>
+
+      <HoverBar day={hovered} booked={hovered ? booked.has(hovered.date) : false} region={REGIONS[settings.region].state} />
+    </div>
+  )
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="grid gap-3">
+      <h3 className="px-1 text-xs font-semibold tracking-[0.2em] text-stone-500 uppercase">{title}</h3>
+      {children}
+    </section>
+  )
+}
+
+function SchoolBreaks() {
+  const year = String(YEAR)
+  return (
+    <div className="rounded-3xl border border-white bg-white/70 p-4 text-sm shadow-sm shadow-stone-900/5">
+      <ul className="grid gap-1.5">
+        {SCHOOL_BREAKS_RLP.map((b) => (
+          <li key={b.start} className="flex items-center gap-3">
+            <span className="h-[3px] w-4 shrink-0 rounded-full bg-lilac-500/55" />
+            <span className="flex-1 text-stone-700">{b.name}</span>
+            <span className="text-xs text-stone-500 tabular-nums">
+              {rangeLabel(b.start, b.end)}
+              {!b.start.startsWith(year) || !b.end.startsWith(year) ? ` ${b.start.slice(2, 4)}/${b.end.slice(2, 4)}` : ''}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 text-xs leading-relaxed text-stone-500">
+        Только для справки, отпуск не меняют. Зимних и Pfingstferien в 2027 нет; плюс у каждой школы до 6 своих
+        beweglicher Ferientage — их даты знает только школа.
+      </p>
+    </div>
+  )
+}
+
+function Legend() {
+  const items: [string, string][] = [
+    ['bg-linear-to-br from-blush-600 to-peach-600', 'отпуск'],
+    ['bg-blush-100 ring-1 ring-inset ring-blush-200', 'выходные внутри отпуска'],
+    ['bg-sage-100 ring-1 ring-inset ring-sage-300', 'праздник'],
+    ['outline-1 outline-dashed outline-butter-500', 'праздник в другой земле'],
+    ['bg-butter-500 !size-1.5 rounded-full', 'мостик'],
+    ['bg-mist-500 !size-1.5 rounded-full', 'особый день'],
+    ['bg-lilac-500/55 !h-[3px] !w-3 rounded-full', 'школьные каникулы RLP'],
+  ]
+  return (
+    <div className="mb-5 flex flex-wrap gap-x-5 gap-y-2 px-1 text-xs text-stone-500">
+      {items.map(([swatch, label]) => (
+        <span key={label} className="flex items-center gap-2">
+          <span className={`size-3 rounded ${swatch}`} />
+          {label}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function HoverBar({ day, booked, region }: { day: Day | null; booked: boolean; region: string }) {
+  const lines: string[] = []
+  if (day) {
+    if (day.holiday) lines.push(`${day.holiday.name} — праздник в ${region}`)
+    else if (day.kind === 'weekend') lines.push('выходной')
+    else if (day.kind === 'company') lines.push('фирма не работает')
+    else if (booked) lines.push(`в отпуске · −${daysWord(day.cost)}`)
+    else lines.push(day.cost < 1 ? 'рабочий полдня' : 'рабочий день')
+    if (day.elsewhere) lines.push(`${day.elsewhere.name} — праздник только в ${day.elsewhere.regions.join(', ')}`)
+    if (day.observance && !day.holiday) lines.push(`${day.observance.name}: ${day.observance.note}`)
+    if (day.schoolBreak) lines.push(`${day.schoolBreak.name} в школах RLP`)
+  }
+  return (
+    <div
+      className={`pointer-events-none fixed bottom-6 left-1/2 z-10 max-w-[calc(100vw-2rem)] -translate-x-1/2 rounded-2xl border border-stone-200 bg-white/90 px-5 py-3 text-sm text-stone-800 shadow-xl shadow-stone-900/10 backdrop-blur-xl transition duration-200 ${day ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'}`}
+    >
+      {day && (
+        <>
+          <span className="font-semibold">{dayLabel(day.date)}</span>
+          {lines.map((line) => (
+            <span key={line} className="text-stone-500">
+              {' · '}
+              {line}
+            </span>
+          ))}
+        </>
+      )}
+    </div>
+  )
+}

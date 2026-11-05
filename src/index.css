@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Unbounded", "Manrope", ui-sans-serif, sans-serif;
+
+  /* Tints for areas, saturated tones for marks; text pairs checked for WCAG contrast. */
+  --color-blush-50: #fff1f4;
+  --color-blush-100: #ffe1e8;
+  --color-blush-200: #fcc5d2;
+  --color-blush-300: #f6a0b5;
+  --color-blush-500: #df5a7f;
+  --color-blush-600: #c8436a;
+  --color-blush-700: #a63457;
+  --color-peach-200: #fde0cf;
+  --color-peach-500: #ec7a55;
+  --color-peach-600: #d9603f;
+  --color-lilac-200: #e6defa;
+  --color-lilac-500: #9a7fe0;
+  --color-sage-100: #dcefe3;
+  --color-sage-300: #a9d4b9;
+  --color-sage-400: #7fbf98;
+  --color-sage-700: #2f6b4a;
+  --color-butter-100: #fdf3d6;
+  --color-butter-300: #f0d27a;
+  --color-butter-500: #d4911a;
+  --color-butter-800: #7a5a12;
+  --color-mist-500: #4f8fd0;
+  --color-berry-400: #e5737a;
+  --color-berry-600: #c0444f;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  @apply min-h-screen bg-[#fcf9f7] font-sans text-stone-800 antialiased;
+}
+
+input[type='number']::-webkit-inner-spin-button {
+  opacity: 0.35;
+}
