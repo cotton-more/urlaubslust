@@ -213,6 +213,7 @@ const lostHolidays = (year: number, work: Region) => holidayLuck(buildYear(year,
 function YearPicker({ year, planned, work, onChange }: { year: number; planned: Years; work: Region; onChange: (year: number) => void }) {
   const near = [year - 1, year, year + 1]
   const lucky = useMemo(() => new Set(near.filter((y) => lostHolidays(y, work) === 0)), [year, work])
+  const now = new Date().getFullYear()
   const button = 'rounded-full px-2.5 py-1 text-xs font-semibold transition'
   return (
     <nav className="flex items-center gap-1 text-stone-500">
@@ -224,7 +225,8 @@ function YearPicker({ year, planned, work, onChange }: { year: number; planned: 
           key={y}
           type="button"
           onClick={() => onChange(y)}
-          className={`${button} ${y === year ? 'bg-white text-stone-900 shadow-sm' : 'hover:bg-white/70 hover:text-stone-900'}`}
+          title={y === now ? 'текущий год' : undefined}
+          className={`${button} ${y === year ? 'bg-white text-stone-900 shadow-sm' : 'hover:bg-white/70 hover:text-stone-900'} ${y === now ? 'underline decoration-blush-400 decoration-2 underline-offset-4' : ''}`}
         >
           {y}
           {lucky.has(y) && (
@@ -237,6 +239,20 @@ function YearPicker({ year, planned, work, onChange }: { year: number; planned: 
       ))}
       <button type="button" onClick={() => onChange(year + 1)} aria-label="Следующий год" className={`${button} hover:bg-white/70 hover:text-stone-900`}>
         ›
+      </button>
+      {/* Always laid out, only faded in when away from the current year, so nothing around it moves. */}
+      <button
+        type="button"
+        onClick={() => onChange(now)}
+        tabIndex={year === now ? -1 : 0}
+        aria-hidden={year === now}
+        className={`ml-1 flex items-center gap-1.5 rounded-full bg-linear-to-r from-blush-600 to-peach-600 py-1 pr-3 pl-2.5 text-xs font-semibold text-white shadow-md shadow-blush-600/30 transition duration-300 hover:shadow-lg hover:shadow-blush-600/40 active:scale-95 ${year === now ? 'pointer-events-none scale-90 opacity-0' : 'scale-100 opacity-100'}`}
+      >
+        <span className="relative flex size-1.5">
+          <span className="absolute size-full animate-ping rounded-full bg-white/80" />
+          <span className="relative size-1.5 rounded-full bg-white" />
+        </span>
+        {year > now ? '←' : '→'} {now}
       </button>
     </nav>
   )
