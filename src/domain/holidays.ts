@@ -1,11 +1,25 @@
-import { addDays, iso, utc, type ISODate } from './dates'
+import { addDays, iso, utc, weekday, type ISODate } from './dates'
 
-/** Bundesländer that matter here: the office is in Frankfurt (Hessen), home is Mainz (Rheinland-Pfalz). */
-export type Region = 'HE' | 'RP'
+export type Region = 'BW' | 'BY' | 'BE' | 'BB' | 'HB' | 'HH' | 'HE' | 'MV' | 'NI' | 'NW' | 'RP' | 'SL' | 'SN' | 'ST' | 'SH' | 'TH'
 
-export const REGIONS: Record<Region, { state: string; city: string }> = {
-  HE: { state: 'Hessen', city: 'Франкфурт' },
-  RP: { state: 'Rheinland-Pfalz', city: 'Майнц' },
+/** The Bundesländer by their ISO 3166-2:DE suffix. */
+export const REGIONS: Record<Region, string> = {
+  BW: 'Baden-Württemberg',
+  BY: 'Bayern',
+  BE: 'Berlin',
+  BB: 'Brandenburg',
+  HB: 'Bremen',
+  HH: 'Hamburg',
+  HE: 'Hessen',
+  MV: 'Mecklenburg-Vorpommern',
+  NI: 'Niedersachsen',
+  NW: 'Nordrhein-Westfalen',
+  RP: 'Rheinland-Pfalz',
+  SL: 'Saarland',
+  SN: 'Sachsen',
+  ST: 'Sachsen-Anhalt',
+  SH: 'Schleswig-Holstein',
+  TH: 'Thüringen',
 }
 
 /** A gesetzlicher Feiertag and the regions where it is one. */
@@ -22,7 +36,7 @@ export interface Observance {
   note: string
 }
 
-const BOTH: readonly Region[] = ['HE', 'RP']
+const ALL = Object.keys(REGIONS) as Region[]
 
 /** Easter Sunday, Gregorian calendar (Meeus/Jones/Butcher). */
 export function easterSunday(year: number): Date {
@@ -42,22 +56,36 @@ export function easterSunday(year: number): Date {
   return utc(year, Math.floor(n / 31), (n % 31) + 1)
 }
 
+/**
+ * Statewide gesetzliche Feiertage by current law. Holidays that only some municipalities keep
+ * (Fronleichnam in parts of Sachsen and Thüringen, Mariä Himmelfahrt in catholic Bavaria, Augsburger Friedensfest)
+ * and Easter/Pentecost Sunday are left out.
+ */
 export function legalHolidays(year: number): Holiday[] {
   const easter = easterSunday(year)
   const fromEaster = (days: number) => iso(addDays(easter, days))
   const fixed = (month: number, day: number) => iso(utc(year, month, day))
+  // Buß- und Bettag: the Wednesday before 23 November.
+  const nov22 = utc(year, 11, 22)
+  const repentance = iso(addDays(nov22, -((weekday(nov22) + 5) % 7)))
   return [
-    { date: fixed(1, 1), name: 'Neujahr', regions: BOTH },
-    { date: fromEaster(-2), name: 'Karfreitag', regions: BOTH },
-    { date: fromEaster(1), name: 'Ostermontag', regions: BOTH },
-    { date: fixed(5, 1), name: 'Tag der Arbeit', regions: BOTH },
-    { date: fromEaster(39), name: 'Christi Himmelfahrt', regions: BOTH },
-    { date: fromEaster(50), name: 'Pfingstmontag', regions: BOTH },
-    { date: fromEaster(60), name: 'Fronleichnam', regions: BOTH },
-    { date: fixed(10, 3), name: 'Tag der Deutschen Einheit', regions: BOTH },
-    { date: fixed(11, 1), name: 'Allerheiligen', regions: ['RP'] },
-    { date: fixed(12, 25), name: '1. Weihnachtstag', regions: BOTH },
-    { date: fixed(12, 26), name: '2. Weihnachtstag', regions: BOTH },
+    { date: fixed(1, 1), name: 'Neujahr', regions: ALL },
+    { date: fixed(1, 6), name: 'Heilige Drei Könige', regions: ['BW', 'BY', 'ST'] },
+    { date: fixed(3, 8), name: 'Internationaler Frauentag', regions: ['BE', 'MV'] },
+    { date: fromEaster(-2), name: 'Karfreitag', regions: ALL },
+    { date: fromEaster(1), name: 'Ostermontag', regions: ALL },
+    { date: fixed(5, 1), name: 'Tag der Arbeit', regions: ALL },
+    { date: fromEaster(39), name: 'Christi Himmelfahrt', regions: ALL },
+    { date: fromEaster(50), name: 'Pfingstmontag', regions: ALL },
+    { date: fromEaster(60), name: 'Fronleichnam', regions: ['BW', 'BY', 'HE', 'NW', 'RP', 'SL'] },
+    { date: fixed(8, 15), name: 'Mariä Himmelfahrt', regions: ['SL'] },
+    { date: fixed(9, 20), name: 'Weltkindertag', regions: ['TH'] },
+    { date: fixed(10, 3), name: 'Tag der Deutschen Einheit', regions: ALL },
+    { date: fixed(10, 31), name: 'Reformationstag', regions: ['BB', 'HB', 'HH', 'MV', 'NI', 'SN', 'ST', 'SH', 'TH'] },
+    { date: fixed(11, 1), name: 'Allerheiligen', regions: ['BW', 'BY', 'NW', 'RP', 'SL'] },
+    { date: repentance, name: 'Buß- und Bettag', regions: ['SN'] },
+    { date: fixed(12, 25), name: '1. Weihnachtstag', regions: ALL },
+    { date: fixed(12, 26), name: '2. Weihnachtstag', regions: ALL },
   ]
 }
 
@@ -67,7 +95,7 @@ export function observances(year: number): Observance[] {
     {
       date: iso(addDays(easter, -48)),
       name: 'Rosenmontag',
-      note: 'не государственный праздник; в Майнце многие фирмы отпускают, но это по договорённости',
+      note: 'не государственный праздник; в карнавальных городах многие фирмы отпускают, но это по договорённости',
     },
     { date: iso(utc(year, 12, 24)), name: 'Heiligabend', note: 'по закону рабочий день — зависит от фирмы' },
     { date: iso(utc(year, 12, 31)), name: 'Silvester', note: 'по закону рабочий день — зависит от фирмы' },

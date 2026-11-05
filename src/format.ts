@@ -3,7 +3,6 @@ import { parse, utc, type ISODate } from './domain/dates'
 const format = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('ru-RU', { timeZone: 'UTC', ...options })
 const monthFormat = format({ month: 'long' })
 const dayFormat = format({ weekday: 'short', day: 'numeric', month: 'long' })
-const weekdayFormat = format({ weekday: 'long' })
 const shortFormat = format({ day: 'numeric', month: 'short' })
 
 export const WEEKDAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
@@ -14,7 +13,6 @@ export function monthName(year: number, month: number): string {
 }
 
 export const dayLabel = (date: ISODate) => dayFormat.format(parse(date))
-export const weekdayName = (date: ISODate) => weekdayFormat.format(parse(date))
 
 export function rangeLabel(start: ISODate, end: ISODate): string {
   return start === end ? shortFormat.format(parse(start)) : `${shortFormat.format(parse(start))} – ${shortFormat.format(parse(end))}`

@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode
 import { buildYear, isOff, type Day } from './domain/calendar'
 import type { ISODate } from './domain/dates'
 import { REGIONS } from './domain/holidays'
-import { schoolBreaksIn } from './domain/schoolBreaks'
+import type { SchoolBreak } from './domain/schoolBreaks'
 import { toICS } from './domain/ics'
 import { bridgeDays, trips, usage, workdaysBetween, type Trip } from './domain/plan'
 import { dayLabel, days as daysWord, rangeLabel } from './format'
 import { usePlan, type Years } from './usePlan'
+import { useSchoolBreaks, type BreaksStatus } from './useSchoolBreaks'
 import { MonthCard } from './components/MonthCard'
 import { Summary } from './components/Summary'
 import { SettingsPanel } from './components/SettingsPanel'
@@ -20,7 +21,11 @@ export default function App() {
   const drag = useRef<boolean | null>(null)
   const anchor = useRef<ISODate | null>(null)
 
-  const days = useMemo(() => buildYear(year, settings), [year, settings.region, settings.eves])
+  const schoolBreaks = useSchoolBreaks(settings.home, year)
+  const days = useMemo(
+    () => buildYear(year, settings, schoolBreaks.breaks),
+    [year, settings.work, settings.home, settings.eves, schoolBreaks.breaks],
+  )
   const booked = useMemo(() => new Set(plan.booked), [plan.booked])
   const tripList = useMemo(() => trips(days, booked), [days, booked])
   const stats = usage(days, booked, settings)
@@ -87,7 +92,7 @@ export default function App() {
         <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="mb-2 text-xs font-semibold tracking-[0.3em] text-stone-500 uppercase">
-              {REGIONS[settings.region].city} · {REGIONS[settings.region].state}
+              {settings.work === settings.home ? REGIONS[settings.work] : `работа: ${REGIONS[settings.work]} · дом: ${REGIONS[settings.home]}`}
             </p>
             <h1 className="font-display text-4xl font-bold tracking-tight sm:text-5xl">
               Отпуск{' '}
@@ -114,7 +119,7 @@ export default function App() {
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <main>
-            <Legend />
+            <Legend home={settings.home} />
             <div
               className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
               onPointerLeave={() => setHovered(null)}
@@ -160,8 +165,8 @@ export default function App() {
             <Section title="Другое устройство">
               <TransferPanel years={years} onImport={replaceAll} />
             </Section>
-            <Section title="Школьные каникулы RLP">
-              <SchoolBreaks year={year} />
+            <Section title={`Школьные каникулы · ${settings.home}`}>
+              <SchoolBreaks year={year} region={REGIONS[settings.home]} {...schoolBreaks} />
             </Section>
             {tips.length > 0 && (
               <Section title="Brückentage">
@@ -172,7 +177,7 @@ export default function App() {
         </div>
       </div>
 
-      <HoverBar day={hovered} booked={hovered ? booked.has(hovered.date) : false} region={REGIONS[settings.region].state} />
+      <HoverBar day={hovered} booked={hovered ? booked.has(hovered.date) : false} work={REGIONS[settings.work]} home={settings.home} />
     </div>
   )
 }
@@ -212,15 +217,26 @@ function YearPicker({ year, planned, onChange }: { year: number; planned: Years;
   )
 }
 
-function SchoolBreaks({ year }: { year: number }) {
-  const breaks = schoolBreaksIn(year)
+interface SchoolBreaksProps {
+  year: number
+  region: string
+  breaks: readonly SchoolBreak[]
+  status: BreaksStatus
+}
+
+function SchoolBreaks({ year, region, breaks, status }: SchoolBreaksProps) {
   const own = String(year)
+  const empty = {
+    loading: 'Загружаю каникулы…',
+    failed: 'Не получилось загрузить каникулы — нет связи с openholidaysapi.org.',
+    ready: `${region} ещё не опубликовала каникулы на ${year} год.`,
+  }[status]
   return (
     <div className="rounded-3xl border border-white bg-white/70 p-4 text-sm shadow-sm shadow-stone-900/5">
-      {breaks.length === 0 && <p className="text-stone-500">На {year} год каникулы ещё не опубликованы.</p>}
+      {breaks.length === 0 && <p className="text-stone-500">{empty}</p>}
       <ul className="grid gap-1.5">
         {breaks.map((b) => (
-          <li key={b.start} className="flex items-center gap-3">
+          <li key={`${b.start}-${b.name}`} className="flex items-center gap-3">
             <span className="h-[3px] w-4 shrink-0 rounded-full bg-lilac-500/55" />
             <span className="flex-1 text-stone-700">{b.name}</span>
             <span className="text-xs text-stone-500 tabular-nums">
@@ -231,22 +247,22 @@ function SchoolBreaks({ year }: { year: number }) {
         ))}
       </ul>
       <p className="mt-3 text-xs leading-relaxed text-stone-500">
-        Только для справки, отпуск не меняют. Плюс у каждой школы до 6 своих
-        beweglicher Ferientage — их даты знает только школа.
+        Только для справки, отпуск не меняют. Данные — openholidaysapi.org. Плюс у школ бывают свои bewegliche
+        Ferientage — их даты знает только школа.
       </p>
     </div>
   )
 }
 
-function Legend() {
+function Legend({ home }: { home: string }) {
   const items: [string, string][] = [
     ['bg-linear-to-br from-blush-600 to-peach-600', 'отпуск'],
     ['bg-blush-100 ring-1 ring-inset ring-blush-200', 'выходные внутри отпуска'],
     ['bg-sage-100 ring-1 ring-inset ring-sage-300', 'праздник'],
-    ['outline-1 outline-dashed outline-butter-500', 'праздник в другой земле'],
+    ['outline-1 outline-dashed outline-butter-500', `праздник только дома (${home})`],
     ['bg-butter-500 !size-1.5 rounded-full', 'мостик'],
     ['bg-mist-500 !size-1.5 rounded-full', 'особый день'],
-    ['bg-lilac-500/55 !h-[3px] !w-3 rounded-full', 'школьные каникулы RLP'],
+    ['bg-lilac-500/55 !h-[3px] !w-3 rounded-full', `школьные каникулы ${home}`],
   ]
   return (
     <div className="mb-5 flex flex-wrap gap-x-5 gap-y-2 px-1 text-xs text-stone-500">
@@ -260,17 +276,17 @@ function Legend() {
   )
 }
 
-function HoverBar({ day, booked, region }: { day: Day | null; booked: boolean; region: string }) {
+function HoverBar({ day, booked, work, home }: { day: Day | null; booked: boolean; work: string; home: string }) {
   const lines: string[] = []
   if (day) {
-    if (day.holiday) lines.push(`${day.holiday.name} — праздник в ${region}`)
+    if (day.holiday) lines.push(`${day.holiday.name} — праздник в ${work}`)
     else if (day.kind === 'weekend') lines.push('выходной')
     else if (day.kind === 'company') lines.push('фирма не работает')
     else if (booked) lines.push(`в отпуске · −${daysWord(day.cost)}`)
     else lines.push(day.cost < 1 ? 'рабочий полдня' : 'рабочий день')
-    if (day.elsewhere) lines.push(`${day.elsewhere.name} — праздник только в ${day.elsewhere.regions.join(', ')}`)
+    if (day.elsewhere) lines.push(`${day.elsewhere.name} — праздник дома (${home}), но не на работе`)
     if (day.observance && !day.holiday) lines.push(`${day.observance.name}: ${day.observance.note}`)
-    if (day.schoolBreak) lines.push(`${day.schoolBreak.name} в школах RLP`)
+    if (day.schoolBreak) lines.push(`${day.schoolBreak.name} в школах ${home}`)
   }
   return (
     <div

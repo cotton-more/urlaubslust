@@ -1,6 +1,5 @@
 import type { EveRule, Settings } from '../domain/calendar'
 import { REGIONS, type Region } from '../domain/holidays'
-import { weekdayName } from '../format'
 
 interface Props {
   year: number
@@ -42,6 +41,25 @@ function NumberField({ label, value, onChange }: { label: string; value: number;
   )
 }
 
+function RegionField({ label, value, onChange }: { label: string; value: Region; onChange: (v: Region) => void }) {
+  return (
+    <label className="grid gap-1.5">
+      <span className="text-xs text-stone-500">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as Region)}
+        className="w-full rounded-2xl border border-stone-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none transition focus:border-blush-300 focus:ring-4 focus:ring-blush-200/50"
+      >
+        {(Object.keys(REGIONS) as Region[]).map((r) => (
+          <option key={r} value={r}>
+            {REGIONS[r]}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
 export function SettingsPanel({ year, settings, onChange }: Props) {
   return (
     <div className="grid gap-4 rounded-3xl border border-white bg-white/70 p-5 shadow-sm shadow-stone-900/5 backdrop-blur-xl">
@@ -49,13 +67,9 @@ export function SettingsPanel({ year, settings, onChange }: Props) {
         <NumberField label={`Отпуск в ${year}, раб. дней`} value={settings.entitlement} onChange={(entitlement) => onChange({ entitlement })} />
         <NumberField label={`Остаток с ${year - 1}`} value={settings.carryover} onChange={(carryover) => onChange({ carryover })} />
       </div>
-      <div className="grid gap-1.5">
-        <span className="text-xs text-stone-500">Где работаешь — чьи праздники</span>
-        <Segmented<Region>
-          value={settings.region}
-          options={(Object.keys(REGIONS) as Region[]).map((r) => [r, `${REGIONS[r].city} · ${r}`])}
-          onChange={(region) => onChange({ region })}
-        />
+      <div className="grid grid-cols-2 gap-3">
+        <RegionField label="Работаю в — праздники" value={settings.work} onChange={(work) => onChange({ work })} />
+        <RegionField label="Живу в — каникулы" value={settings.home} onChange={(home) => onChange({ home })} />
       </div>
       <div className="grid gap-1.5">
         <span className="text-xs text-stone-500">24.12 и 31.12 в фирме</span>
@@ -79,8 +93,12 @@ export function SettingsPanel({ year, settings, onChange }: Props) {
             их можно даже не кликать, они сами войдут в период отпуска.
           </p>
           <p>
-            Праздники действуют по месту работы (Arbeitsort): офис во Франкфурте — Гессен, home office в Майнце — Рейнланд-Пфальц.
-            Разница одна: <b className="text-stone-800">Allerheiligen, 1 ноября</b> (пунктир на календаре); в {year} это {weekdayName(`${year}-11-01`)}.
+            Праздники действуют по месту работы (Arbeitsort), а не по месту жительства. Праздники земли, где живёшь,
+            но не работаешь, обведены пунктиром — в эти дни ты работаешь.
+          </p>
+          <p>
+            Настройки свои у каждого года. Год, который ещё не планировался, берёт их у предыдущего — так что переезд
+            или новую работу достаточно указать в первом году, где они начинаются.
           </p>
           <p>Остаток прошлого года нужно взять до 31 марта, иначе он сгорает (§ 7 Abs. 3 BUrlG).</p>
         </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { ISODate } from './domain/dates'
 import type { EveRule, Settings } from './domain/calendar'
-import type { Region } from './domain/holidays'
+import { REGIONS, type Region } from './domain/holidays'
 
 /** One year's settings and booked days. */
 export interface Plan {
@@ -17,11 +17,10 @@ interface Store {
   years: Years
 }
 
-const DEFAULT_SETTINGS: Settings = { region: 'HE', entitlement: 30, carryover: 0, eves: 'full' }
+const DEFAULT_SETTINGS: Settings = { work: 'HE', home: 'RP', entitlement: 30, carryover: 0, eves: 'full' }
 const STORAGE_KEY = 'urlaub:plan'
 /** Where the single-year version kept its 2027 plan. */
 const LEGACY_KEY = 'urlaub-2027:plan'
-const REGIONS: Region[] = ['HE', 'RP']
 const EVES: EveRule[] = ['full', 'half', 'off']
 
 function sanitize(raw: unknown, year: number): Plan | null {
@@ -29,10 +28,14 @@ function sanitize(raw: unknown, year: number): Plan | null {
   const { settings, booked } = raw as Partial<Plan>
   if (!settings || !Array.isArray(booked)) return null
   const number = (v: unknown, fallback: number) => (typeof v === 'number' && v >= 0 ? v : fallback)
+  const region = (v: unknown, fallback: Region) => (typeof v === 'string' && v in REGIONS ? (v as Region) : fallback)
+  // Before home and work were separate there was one `region` for work, and school breaks were always RLP's.
+  const legacy = (settings as { region?: unknown }).region
   const date = new RegExp(`^${year}-\\d{2}-\\d{2}$`)
   return {
     settings: {
-      region: REGIONS.includes(settings.region) ? settings.region : DEFAULT_SETTINGS.region,
+      work: region(settings.work ?? legacy, DEFAULT_SETTINGS.work),
+      home: region(settings.home, legacy ? 'RP' : DEFAULT_SETTINGS.home),
       entitlement: number(settings.entitlement, DEFAULT_SETTINGS.entitlement),
       carryover: number(settings.carryover, 0),
       eves: EVES.includes(settings.eves) ? settings.eves : DEFAULT_SETTINGS.eves,

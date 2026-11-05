@@ -5,10 +5,16 @@ import { buildYear, type Settings } from './calendar'
 import { bridgeDays, trips, usage, workdaysBetween } from './plan'
 import { toICS } from './ics'
 import { blankPlan, decodePlans, encodePlans } from '../usePlan'
-import { schoolBreaksIn } from './schoolBreaks'
+import { parseSchoolBreaks, schoolBreaksURL } from './schoolBreaks'
 
-const settings: Settings = { region: 'HE', entitlement: 30, carryover: 0, eves: 'full' }
-const hessen = buildYear(2027, settings)
+const settings: Settings = { work: 'HE', home: 'RP', entitlement: 30, carryover: 0, eves: 'full' }
+const RLP_BREAKS_2027 = [
+  { name: 'Weihnachtsferien', start: '2026-12-23', end: '2027-01-08' },
+  { name: 'Osterferien', start: '2027-03-22', end: '2027-04-02' },
+  { name: 'Sommerferien', start: '2027-06-28', end: '2027-08-06' },
+  { name: 'Weihnachtsferien', start: '2027-12-23', end: '2028-01-07' },
+]
+const hessen = buildYear(2027, settings, RLP_BREAKS_2027)
 const day = (date: string, days = hessen) => days.find((d) => d.date === date)!
 
 describe('holidays', () => {
@@ -29,11 +35,30 @@ describe('holidays', () => {
     })
   })
 
-  it('makes Allerheiligen a holiday only in Rheinland-Pfalz', () => {
+  it('marks Allerheiligen as a home holiday when working in Hessen and living in Rheinland-Pfalz', () => {
     expect(day('2027-11-01').kind).toBe('workday')
     expect(day('2027-11-01').elsewhere?.name).toBe('Allerheiligen')
-    const rlp = buildYear(2027, { ...settings, region: 'RP' })
+    const rlp = buildYear(2027, { ...settings, work: 'RP' })
     expect(day('2027-11-01', rlp).kind).toBe('holiday')
+    expect(day('2027-11-01', buildYear(2027, { ...settings, home: 'HE' })).elsewhere).toBeUndefined()
+  })
+
+  it('knows the holidays of other Bundesländer', () => {
+    const holidays = (work: Settings['work'], year = 2027) =>
+      buildYear(year, { ...settings, work, home: work })
+        .filter((d) => d.holiday)
+        .map((d) => d.holiday!.name)
+    expect(holidays('BY')).toContain('Heilige Drei Könige')
+    expect(holidays('BE')).toContain('Internationaler Frauentag')
+    expect(holidays('NI')).toContain('Reformationstag')
+    expect(holidays('TH')).toContain('Weltkindertag')
+    expect(holidays('HE')).toHaveLength(10)
+    expect(holidays('SN', 2026)).toHaveLength(11)
+  })
+
+  it('puts Buß- und Bettag on the Wednesday before 23 November', () => {
+    const date = (year: number) => legalHolidays(year).find((h) => h.name === 'Buß- und Bettag')!.date
+    expect([2026, 2027, 2028, 2033].map(date)).toEqual(['2026-11-18', '2027-11-17', '2028-11-22', '2033-11-16'])
   })
 })
 
@@ -89,7 +114,7 @@ describe('plan', () => {
 
   it('finds the bridge days', () => {
     expect(bridgeDays(hessen).map((d) => d.date)).toEqual(['2027-05-07', '2027-05-28'])
-    const rlp = buildYear(2027, { ...settings, region: 'RP' })
+    const rlp = buildYear(2027, { ...settings, work: 'RP' })
     expect(bridgeDays(rlp).map((d) => d.date)).toEqual(['2027-05-07', '2027-05-28'])
   })
 })
@@ -125,6 +150,11 @@ describe('plan code', () => {
     expect(decodePlans(encodePlans({ 2027: { settings, booked: ['2027-01-04', '2028-01-03'] } }))?.[2027].booked).toEqual(['2027-01-04'])
   })
 
+  it('splits the single region of older plans into work there and school breaks from Rheinland-Pfalz', () => {
+    const old = { settings: { region: 'HE', entitlement: 29, carryover: 0, eves: 'full' }, booked: [] }
+    expect(decodePlans(btoa(JSON.stringify({ 2027: old })))?.[2027].settings).toMatchObject({ work: 'HE', home: 'RP' })
+  })
+
   it('reads a code from the single-year version', () => {
     expect(decodePlans(btoa(JSON.stringify(plan)))).toEqual({ 2027: { ...plan, booked: ['2027-03-30', '2027-05-18'] } })
   })
@@ -136,6 +166,27 @@ describe('plan code', () => {
   })
 })
 
+describe('school breaks', () => {
+  it('asks OpenHolidays for one Bundesland and year', () => {
+    expect(schoolBreaksURL('RP', 2028)).toBe(
+      'https://openholidaysapi.org/SchoolHolidays?countryIsoCode=DE&subdivisionCode=DE-RP&languageIsoCode=DE&validFrom=2028-01-01&validTo=2028-12-31',
+    )
+  })
+
+  it('reads an OpenHolidays response', () => {
+    const raw = [
+      { startDate: '2028-04-10', endDate: '2028-04-21', name: [{ language: 'EN', text: 'Easter' }, { language: 'DE', text: 'Osterferien' }] },
+      { startDate: '2027-12-23', endDate: '2028-01-07', name: [{ language: 'DE', text: 'Weihnachtsferien' }] },
+      { startDate: 'soon', endDate: '2028-01-07', name: [] },
+    ]
+    expect(parseSchoolBreaks(raw)).toEqual([
+      { name: 'Weihnachtsferien', start: '2027-12-23', end: '2028-01-07' },
+      { name: 'Osterferien', start: '2028-04-10', end: '2028-04-21' },
+    ])
+    expect(() => parseSchoolBreaks({ error: 'nope' })).toThrow()
+  })
+})
+
 describe('years', () => {
   it('starts a new year with the settings of the closest earlier one, without carryover', () => {
     const years = { 2027: { settings: { ...settings, entitlement: 29, carryover: 3 }, booked: ['2027-01-04'] } }
@@ -144,10 +195,6 @@ describe('years', () => {
     expect(blankPlan({}, 2027).booked).toEqual([])
   })
 
-  it('lists the school breaks touching a year', () => {
-    expect(schoolBreaksIn(2028).map((b) => b.start)).toEqual(['2027-12-23', '2028-04-10', '2028-07-03', '2028-10-09', '2028-12-21'])
-    expect(schoolBreaksIn(2040)).toEqual([])
-  })
 
   it('computes the holidays of any year', () => {
     const days = buildYear(2028, settings)

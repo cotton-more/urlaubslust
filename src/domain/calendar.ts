@@ -6,7 +6,10 @@ import { schoolBreakOn, type SchoolBreak } from './schoolBreaks'
 export type EveRule = 'full' | 'half' | 'off'
 
 export interface Settings {
-  region: Region
+  /** Bundesland of the workplace (Arbeitsort): its holidays are days off. */
+  work: Region
+  /** Bundesland of home: its school breaks, and holidays work does not have, are shown for reference. */
+  home: Region
   /** Annual entitlement in working days (Mon–Fri). */
   entitlement: number
   /** Resturlaub carried over from the previous year. */
@@ -26,12 +29,12 @@ export interface Day {
   kind: DayKind
   /** Vacation days spent when this day is booked; weekends and holidays cost nothing (§ 3 BUrlG). */
   cost: number
-  /** Legal holiday in the chosen region. */
+  /** Legal holiday at work. */
   holiday?: Holiday
-  /** Legal holiday only in the other region. */
+  /** Legal holiday at home but not at work. */
   elsewhere?: Holiday
   observance?: Observance
-  /** Schulferien in Rheinland-Pfalz, for reference only. */
+  /** Schulferien at home, for reference only. */
   schoolBreak?: SchoolBreak
 }
 
@@ -41,7 +44,11 @@ export function isOff(day: Day): boolean {
   return day.kind !== 'workday'
 }
 
-export function buildYear(year: number, { region, eves }: Pick<Settings, 'region' | 'eves'>): Day[] {
+export function buildYear(
+  year: number,
+  { work, home, eves }: Pick<Settings, 'work' | 'home' | 'eves'>,
+  breaks: readonly SchoolBreak[] = [],
+): Day[] {
   const holidays = new Map(legalHolidays(year).map((h) => [h.date, h]))
   const notable = new Map(observances(year).map((o) => [o.date, o]))
   const eveDates = new Set([iso(utc(year, 12, 24)), iso(utc(year, 12, 31))])
@@ -51,7 +58,7 @@ export function buildYear(year: number, { region, eves }: Pick<Settings, 'region
     const date = iso(d)
     const wd = weekday(d)
     const h = holidays.get(date)
-    const local = h?.regions.includes(region) ? h : undefined
+    const local = h?.regions.includes(work) ? h : undefined
 
     let kind: DayKind = 'workday'
     let cost = 1
@@ -70,9 +77,9 @@ export function buildYear(year: number, { region, eves }: Pick<Settings, 'region
       kind,
       cost,
       holiday: local,
-      elsewhere: h && !local ? h : undefined,
+      elsewhere: h && !local && h.regions.includes(home) ? h : undefined,
       observance: notable.get(date),
-      schoolBreak: schoolBreakOn(date),
+      schoolBreak: schoolBreakOn(breaks, date),
     })
   }
   return days
