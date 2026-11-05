@@ -2,6 +2,7 @@ import type { Usage } from '../domain/plan'
 import { days, num, periods } from '../format'
 
 interface Props {
+  year: number
   usage: Usage
   daysOff: number
   tripCount: number
@@ -10,7 +11,7 @@ interface Props {
 const R = 52
 const CIRCUMFERENCE = 2 * Math.PI * R
 
-export function Summary({ usage, daysOff, tripCount }: Props) {
+export function Summary({ year, usage, daysOff, tripCount }: Props) {
   const share = usage.total > 0 ? Math.min(usage.used / usage.total, 1) : 0
   const over = usage.remaining < 0
   return (
@@ -64,7 +65,7 @@ export function Summary({ usage, daysOff, tripCount }: Props) {
       </div>
       {usage.carryoverAtRisk > 0 && (
         <p className="mt-5 rounded-2xl bg-butter-100 px-4 py-3 text-xs leading-relaxed text-butter-800 ring-1 ring-inset ring-butter-300/60">
-          <b>{days(usage.carryoverAtRisk)}</b> остатка с 2026 ещё не запланировано до 31 марта — после этого он
+          <b>{days(usage.carryoverAtRisk)}</b> остатка с {year - 1} ещё не запланировано до 31 марта — после этого он
           сгорает (§ 7 Abs. 3 BUrlG).
         </p>
       )}

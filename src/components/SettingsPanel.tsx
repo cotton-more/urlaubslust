@@ -1,7 +1,9 @@
 import type { EveRule, Settings } from '../domain/calendar'
 import { REGIONS, type Region } from '../domain/holidays'
+import { weekdayName } from '../format'
 
 interface Props {
+  year: number
   settings: Settings
   onChange: (patch: Partial<Settings>) => void
 }
@@ -40,12 +42,12 @@ function NumberField({ label, value, onChange }: { label: string; value: number;
   )
 }
 
-export function SettingsPanel({ settings, onChange }: Props) {
+export function SettingsPanel({ year, settings, onChange }: Props) {
   return (
     <div className="grid gap-4 rounded-3xl border border-white bg-white/70 p-5 shadow-sm shadow-stone-900/5 backdrop-blur-xl">
       <div className="grid grid-cols-2 gap-3">
-        <NumberField label="Отпуск в 2027, раб. дней" value={settings.entitlement} onChange={(entitlement) => onChange({ entitlement })} />
-        <NumberField label="Остаток с 2026" value={settings.carryover} onChange={(carryover) => onChange({ carryover })} />
+        <NumberField label={`Отпуск в ${year}, раб. дней`} value={settings.entitlement} onChange={(entitlement) => onChange({ entitlement })} />
+        <NumberField label={`Остаток с ${year - 1}`} value={settings.carryover} onChange={(carryover) => onChange({ carryover })} />
       </div>
       <div className="grid gap-1.5">
         <span className="text-xs text-stone-500">Где работаешь — чьи праздники</span>
@@ -78,7 +80,7 @@ export function SettingsPanel({ settings, onChange }: Props) {
           </p>
           <p>
             Праздники действуют по месту работы (Arbeitsort): офис во Франкфурте — Гессен, home office в Майнце — Рейнланд-Пфальц.
-            В 2027 разница одна: <b className="text-stone-800">Allerheiligen, пн 1 ноября</b> (пунктир на календаре).
+            Разница одна: <b className="text-stone-800">Allerheiligen, 1 ноября</b> (пунктир на календаре); в {year} это {weekdayName(`${year}-11-01`)}.
           </p>
           <p>Остаток прошлого года нужно взять до 31 марта, иначе он сгорает (§ 7 Abs. 3 BUrlG).</p>
         </div>

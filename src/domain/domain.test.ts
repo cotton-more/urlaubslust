@@ -4,7 +4,8 @@ import { easterSunday, legalHolidays } from './holidays'
 import { buildYear, type Settings } from './calendar'
 import { bridgeDays, trips, usage, workdaysBetween } from './plan'
 import { toICS } from './ics'
-import { decodePlan, encodePlan } from '../usePlan'
+import { blankPlan, decodePlans, encodePlans } from '../usePlan'
+import { schoolBreaksIn } from './schoolBreaks'
 
 const settings: Settings = { region: 'HE', entitlement: 30, carryover: 0, eves: 'full' }
 const hessen = buildYear(2027, settings)
@@ -109,19 +110,48 @@ describe('ics export', () => {
 
 describe('plan code', () => {
   const plan = { settings: { ...settings, carryover: 2.5, eves: 'half' as const }, booked: ['2027-05-18', '2027-03-30'] }
+  const years = { 2027: plan, 2028: { settings, booked: ['2028-01-03'] } }
 
-  it('round-trips a plan, sorting the days', () => {
-    expect(decodePlan(encodePlan(plan))).toEqual({ ...plan, booked: ['2027-03-30', '2027-05-18'] })
+  it('round-trips every year, sorting the days', () => {
+    expect(decodePlans(encodePlans(years))).toEqual({ ...years, 2027: { ...plan, booked: ['2027-03-30', '2027-05-18'] } })
   })
 
   it('tolerates line breaks pasted into the code', () => {
-    const code = encodePlan(plan)
-    expect(decodePlan(`  ${code.slice(0, 20)}\n${code.slice(20)}\n`)?.booked).toHaveLength(2)
+    const code = encodePlans(years)
+    expect(decodePlans(`  ${code.slice(0, 20)}\n${code.slice(20)}\n`)?.[2027].booked).toHaveLength(2)
+  })
+
+  it('drops days that belong to another year', () => {
+    expect(decodePlans(encodePlans({ 2027: { settings, booked: ['2027-01-04', '2028-01-03'] } }))?.[2027].booked).toEqual(['2027-01-04'])
+  })
+
+  it('reads a code from the single-year version', () => {
+    expect(decodePlans(btoa(JSON.stringify(plan)))).toEqual({ 2027: { ...plan, booked: ['2027-03-30', '2027-05-18'] } })
   })
 
   it('rejects anything that is not a plan', () => {
-    expect(decodePlan('hello')).toBeNull()
-    expect(decodePlan(btoa('{"foo":1}'))).toBeNull()
-    expect(decodePlan('')).toBeNull()
+    expect(decodePlans('hello')).toBeNull()
+    expect(decodePlans(btoa('{"foo":1}'))).toBeNull()
+    expect(decodePlans('')).toBeNull()
+  })
+})
+
+describe('years', () => {
+  it('starts a new year with the settings of the closest earlier one, without carryover', () => {
+    const years = { 2027: { settings: { ...settings, entitlement: 29, carryover: 3 }, booked: ['2027-01-04'] } }
+    expect(blankPlan(years, 2029)).toEqual({ settings: { ...settings, entitlement: 29, carryover: 0 }, booked: [] })
+    expect(blankPlan(years, 2026).settings.entitlement).toBe(29)
+    expect(blankPlan({}, 2027).booked).toEqual([])
+  })
+
+  it('lists the school breaks touching a year', () => {
+    expect(schoolBreaksIn(2028).map((b) => b.start)).toEqual(['2027-12-23', '2028-04-10', '2028-07-03', '2028-10-09', '2028-12-21'])
+    expect(schoolBreaksIn(2040)).toEqual([])
+  })
+
+  it('computes the holidays of any year', () => {
+    const days = buildYear(2028, settings)
+    expect(days).toHaveLength(366)
+    expect(days.find((d) => d.date === '2028-04-14')?.holiday?.name).toBe('Karfreitag')
   })
 })

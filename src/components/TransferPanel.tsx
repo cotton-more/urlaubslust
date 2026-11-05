@@ -1,15 +1,15 @@
 import { useState } from 'react'
-import { decodePlan, encodePlan, type Plan } from '../usePlan'
+import { decodePlans, encodePlans, type Years } from '../usePlan'
 
 interface Props {
-  plan: Plan
-  onImport: (plan: Plan) => void
+  years: Years
+  onImport: (years: Years) => void
 }
 
-export function TransferPanel({ plan, onImport }: Props) {
+export function TransferPanel({ years, onImport }: Props) {
   const [input, setInput] = useState('')
   const [message, setMessage] = useState<[string, boolean] | null>(null)
-  const code = encodePlan(plan)
+  const code = encodePlans(years)
 
   const copy = () =>
     navigator.clipboard
@@ -18,18 +18,18 @@ export function TransferPanel({ plan, onImport }: Props) {
       .catch(() => setMessage(['Не получилось скопировать — выдели код ниже вручную.', false]))
 
   const load = () => {
-    const next = decodePlan(input)
+    const next = decodePlans(input)
     if (!next) return setMessage(['Это не похоже на код плана.', false])
-    if (plan.booked.length > 0 && !confirm('Заменить текущий план загруженным?')) return
+    if (Object.keys(years).length > 0 && !confirm('Заменить планы на все годы загруженными?')) return
     onImport(next)
     setInput('')
-    setMessage([`Загружено: ${next.booked.length} дн. отмечено.`, true])
+    setMessage([`Загружено: ${Object.keys(next).sort().join(', ')}.`, true])
   }
 
   return (
     <div className="grid gap-3 rounded-3xl border border-white bg-white/70 p-5 text-sm shadow-sm shadow-stone-900/5 backdrop-blur-xl">
       <p className="text-xs leading-relaxed text-stone-500">
-        План хранится только в этом браузере. Чтобы открыть его на другом устройстве, скопируй код и загрузи его там.
+        Планы хранятся только в этом браузере. Чтобы открыть их на другом устройстве, скопируй код и загрузи его там — переносятся все годы сразу.
       </p>
       <button
         type="button"

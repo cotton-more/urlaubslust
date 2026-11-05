@@ -2,27 +2,25 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode
 import { buildYear, isOff, type Day } from './domain/calendar'
 import type { ISODate } from './domain/dates'
 import { REGIONS } from './domain/holidays'
-import { SCHOOL_BREAKS_RLP } from './domain/schoolBreaks'
+import { schoolBreaksIn } from './domain/schoolBreaks'
 import { toICS } from './domain/ics'
 import { bridgeDays, trips, usage, workdaysBetween, type Trip } from './domain/plan'
 import { dayLabel, days as daysWord, rangeLabel } from './format'
-import { usePlan } from './usePlan'
+import { usePlan, type Years } from './usePlan'
 import { MonthCard } from './components/MonthCard'
 import { Summary } from './components/Summary'
 import { SettingsPanel } from './components/SettingsPanel'
 import { BridgeTips, TripList } from './components/TripList'
 import { TransferPanel } from './components/TransferPanel'
 
-const YEAR = 2027
-
 export default function App() {
-  const { plan, saved, replace, setSettings, book, clear } = usePlan()
+  const { year, setYear, years, plan, saved, replaceAll, setSettings, book, clear } = usePlan()
   const { settings } = plan
   const [hovered, setHovered] = useState<Day | null>(null)
   const drag = useRef<boolean | null>(null)
   const anchor = useRef<ISODate | null>(null)
 
-  const days = useMemo(() => buildYear(YEAR, settings), [settings.region, settings.eves])
+  const days = useMemo(() => buildYear(year, settings), [year, settings.region, settings.eves])
   const booked = useMemo(() => new Set(plan.booked), [plan.booked])
   const tripList = useMemo(() => trips(days, booked), [days, booked])
   const stats = usage(days, booked, settings)
@@ -70,8 +68,8 @@ export default function App() {
   }
   const removeTrip = (trip: Trip) => book(trip.booked, false)
   const exportICS = () => {
-    const url = URL.createObjectURL(new Blob([toICS(tripList, YEAR, new Date())], { type: 'text/calendar;charset=utf-8' }))
-    const link = Object.assign(document.createElement('a'), { href: url, download: `urlaub-${YEAR}.ics` })
+    const url = URL.createObjectURL(new Blob([toICS(tripList, year, new Date())], { type: 'text/calendar;charset=utf-8' }))
+    const link = Object.assign(document.createElement('a'), { href: url, download: `urlaub-${year}.ics` })
     link.click()
     URL.revokeObjectURL(url)
   }
@@ -93,8 +91,9 @@ export default function App() {
             </p>
             <h1 className="font-display text-4xl font-bold tracking-tight sm:text-5xl">
               Отпуск{' '}
-              <span className="bg-linear-to-r from-blush-600 to-peach-600 bg-clip-text text-transparent">{YEAR}</span>
+              <span className="bg-linear-to-r from-blush-600 to-peach-600 bg-clip-text text-transparent">{year}</span>
             </h1>
+            <YearPicker year={year} planned={years} onChange={setYear} />
           </div>
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-2 rounded-full border border-stone-200 bg-white/70 px-3 py-1.5 text-xs text-stone-500">
@@ -104,7 +103,7 @@ export default function App() {
             {plan.booked.length > 0 && (
               <button
                 type="button"
-                onClick={() => confirm('Сбросить все отмеченные дни?') && clear()}
+                onClick={() => confirm(`Сбросить все отмеченные дни ${year} года?`) && clear()}
                 className="rounded-full border border-stone-200 bg-white/70 px-3 py-1.5 text-xs text-stone-500 transition hover:border-berry-400/50 hover:text-berry-600"
               >
                 сбросить всё
@@ -123,7 +122,7 @@ export default function App() {
               {Array.from({ length: 12 }, (_, month) => (
                 <MonthCard
                   key={month}
-                  year={YEAR}
+                  year={year}
                   month={month}
                   days={days.filter((d) => d.month === month)}
                   booked={booked}
@@ -138,8 +137,8 @@ export default function App() {
           </main>
 
           <aside className="order-first grid min-w-0 grid-cols-1 content-start gap-6 xl:order-none xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:overflow-y-auto xl:pb-4 [scrollbar-width:none]">
-            <Summary usage={stats} daysOff={daysOff} tripCount={tripList.length} />
-            <SettingsPanel settings={settings} onChange={setSettings} />
+            <Summary year={year} usage={stats} daysOff={daysOff} tripCount={tripList.length} />
+            <SettingsPanel year={year} settings={settings} onChange={setSettings} />
             <Section title="Периоды отпуска">
               <TripList trips={tripList} onRemove={removeTrip} />
               {tripList.length > 0 && (
@@ -159,10 +158,10 @@ export default function App() {
               )}
             </Section>
             <Section title="Другое устройство">
-              <TransferPanel plan={plan} onImport={replace} />
+              <TransferPanel years={years} onImport={replaceAll} />
             </Section>
             <Section title="Школьные каникулы RLP">
-              <SchoolBreaks />
+              <SchoolBreaks year={year} />
             </Section>
             {tips.length > 0 && (
               <Section title="Brückentage">
@@ -187,24 +186,52 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   )
 }
 
-function SchoolBreaks() {
-  const year = String(YEAR)
+function YearPicker({ year, planned, onChange }: { year: number; planned: Years; onChange: (year: number) => void }) {
+  const near = [year - 1, year, year + 1]
+  const button = 'rounded-full px-2.5 py-1 text-xs font-semibold transition'
+  return (
+    <nav className="mt-3 flex items-center gap-1 text-stone-500">
+      <button type="button" onClick={() => onChange(year - 1)} aria-label="Предыдущий год" className={`${button} hover:bg-white/70 hover:text-stone-900`}>
+        ‹
+      </button>
+      {near.map((y) => (
+        <button
+          key={y}
+          type="button"
+          onClick={() => onChange(y)}
+          className={`${button} ${y === year ? 'bg-white text-stone-900 shadow-sm' : 'hover:bg-white/70 hover:text-stone-900'}`}
+        >
+          {y}
+          {y !== year && planned[y]?.booked.length ? <span className="ml-1 inline-block size-1 rounded-full bg-blush-500 align-middle" /> : null}
+        </button>
+      ))}
+      <button type="button" onClick={() => onChange(year + 1)} aria-label="Следующий год" className={`${button} hover:bg-white/70 hover:text-stone-900`}>
+        ›
+      </button>
+    </nav>
+  )
+}
+
+function SchoolBreaks({ year }: { year: number }) {
+  const breaks = schoolBreaksIn(year)
+  const own = String(year)
   return (
     <div className="rounded-3xl border border-white bg-white/70 p-4 text-sm shadow-sm shadow-stone-900/5">
+      {breaks.length === 0 && <p className="text-stone-500">На {year} год каникулы ещё не опубликованы.</p>}
       <ul className="grid gap-1.5">
-        {SCHOOL_BREAKS_RLP.map((b) => (
+        {breaks.map((b) => (
           <li key={b.start} className="flex items-center gap-3">
             <span className="h-[3px] w-4 shrink-0 rounded-full bg-lilac-500/55" />
             <span className="flex-1 text-stone-700">{b.name}</span>
             <span className="text-xs text-stone-500 tabular-nums">
               {rangeLabel(b.start, b.end)}
-              {!b.start.startsWith(year) || !b.end.startsWith(year) ? ` ${b.start.slice(2, 4)}/${b.end.slice(2, 4)}` : ''}
+              {!b.start.startsWith(own) || !b.end.startsWith(own) ? ` ${b.start.slice(2, 4)}/${b.end.slice(2, 4)}` : ''}
             </span>
           </li>
         ))}
       </ul>
       <p className="mt-3 text-xs leading-relaxed text-stone-500">
-        Только для справки, отпуск не меняют. Зимних и Pfingstferien в 2027 нет; плюс у каждой школы до 6 своих
+        Только для справки, отпуск не меняют. Плюс у каждой школы до 6 своих
         beweglicher Ferientage — их даты знает только школа.
       </p>
     </div>
