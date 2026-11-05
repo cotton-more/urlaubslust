@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Reveal } from './controls'
 import { decodePlans, encodePlans, type Years } from '../usePlan'
 
 interface Props {
@@ -55,10 +56,9 @@ export function TransferPanel({ years, onImport }: Props) {
         Загрузить план из кода
       </button>
       {message && <p className={`px-1 text-xs ${message[1] ? 'text-sage-700' : 'text-berry-600'}`}>{message[0]}</p>}
-      <details className="text-xs text-stone-500">
-        <summary className="cursor-pointer text-stone-600 transition hover:text-stone-900">Показать код</summary>
+      <Reveal title="Показать код">
         <p className="mt-2 font-mono break-all text-stone-600 select-all">{code}</p>
-      </details>
+      </Reveal>
     </div>
   )
 }
