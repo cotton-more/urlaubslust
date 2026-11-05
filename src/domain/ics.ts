@@ -29,7 +29,7 @@ export function toICS(trips: readonly Trip[], year: number, now: Date): string {
   return [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//urlaub//Urlaubsplaner//DE',
+    'PRODID:-//urlaubslust//Urlaubsplaner//DE',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     `X-WR-CALNAME:Urlaub ${year}`,
