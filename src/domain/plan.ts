@@ -1,5 +1,6 @@
 import type { ISODate } from './dates'
 import { isOff, type Day, type Settings } from './calendar'
+import type { Holiday } from './holidays'
 
 /** One stretch of consecutive days off that contains at least one booked vacation day. */
 export interface Trip {
@@ -76,4 +77,16 @@ export function bridgeDays(days: readonly Day[]): Day[] {
 export function workdaysBetween(days: readonly Day[], a: ISODate, b: ISODate): ISODate[] {
   const [from, to] = a <= b ? [a, b] : [b, a]
   return days.filter((d) => !isOff(d) && d.date >= from && d.date <= to).map((d) => d.date)
+}
+
+/** Holidays at work split by whether they land on a weekday (a free day) or on a weekend (lost). */
+export interface Luck {
+  weekday: Holiday[]
+  weekend: Holiday[]
+}
+
+export function holidayLuck(days: readonly Day[]): Luck {
+  const luck: Luck = { weekday: [], weekend: [] }
+  for (const day of days) if (day.holiday) luck[day.weekday >= 5 ? 'weekend' : 'weekday'].push(day.holiday)
+  return luck
 }

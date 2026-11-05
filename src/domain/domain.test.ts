@@ -3,7 +3,7 @@ import { iso } from './dates'
 import { easterSunday, legalHolidays } from './holidays'
 import { buildYear, type Settings } from './calendar'
 import type { Region } from './holidays'
-import { bridgeDays, trips, usage, workdaysBetween } from './plan'
+import { bridgeDays, holidayLuck, trips, usage, workdaysBetween } from './plan'
 import { toICS } from './ics'
 import { blankPlan, decodePlans, encodePlans } from '../usePlan'
 import { crowd, parseSchoolBreaks, schoolBreaksURL } from './schoolBreaks'
@@ -117,6 +117,23 @@ describe('plan', () => {
     expect(bridgeDays(hessen).map((d) => d.date)).toEqual(['2027-05-07', '2027-05-28'])
     const rlp = buildYear(2027, { ...settings, work: 'RP' })
     expect(bridgeDays(rlp).map((d) => d.date)).toEqual(['2027-05-07', '2027-05-28'])
+  })
+})
+
+describe('holiday luck', () => {
+  const lost = (year: number, work: Settings['work'] = 'HE') =>
+    holidayLuck(buildYear(year, { ...settings, work, home: work })).weekend.map((h) => h.name)
+
+  it('counts the holidays lost to weekends', () => {
+    expect(lost(2027)).toEqual(['Tag der Arbeit', 'Tag der Deutschen Einheit', '1. Weihnachtstag', '2. Weihnachtstag'])
+    expect(holidayLuck(hessen).weekday).toHaveLength(6)
+    expect(lost(2028)).toEqual(['Neujahr'])
+    expect(lost(2029)).toEqual([])
+  })
+
+  it('depends on the Land of work', () => {
+    expect(lost(2027, 'RP')).toHaveLength(4) // Allerheiligen is a Monday
+    expect(lost(2026, 'RP')).toEqual(['Tag der Deutschen Einheit', 'Allerheiligen', '2. Weihnachtstag'])
   })
 })
 

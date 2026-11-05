@@ -4,8 +4,9 @@ import type { ISODate } from './domain/dates'
 import { REGIONS } from './domain/holidays'
 import { POPULATION, type SchoolBreak } from './domain/schoolBreaks'
 import { toICS } from './domain/ics'
-import { bridgeDays, trips, usage, workdaysBetween, type Trip } from './domain/plan'
-import { dayLabel, days as daysWord, rangeLabel } from './format'
+import { bridgeDays, holidayLuck, trips, usage, workdaysBetween, type Luck, type Trip } from './domain/plan'
+import { dayLabel, days as daysWord, rangeLabel, shortDate } from './format'
+import type { Region } from './domain/holidays'
 import { usePlan, type Years } from './usePlan'
 import { useSchoolBreaks, type BreaksStatus } from './useSchoolBreaks'
 import { CROWD_STEPS, MonthCard, type View } from './components/MonthCard'
@@ -104,7 +105,10 @@ export default function App() {
               Отпуск{' '}
               <span className="bg-linear-to-r from-blush-600 to-peach-600 bg-clip-text text-transparent">{year}</span>
             </h1>
-            <YearPicker year={year} planned={years} onChange={setYear} />
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+              <YearPicker year={year} planned={years} work={settings.work} onChange={setYear} />
+              <LuckBadge luck={holidayLuck(days)} />
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-2 rounded-full border border-stone-200 bg-white/70 px-3 py-1.5 text-xs text-stone-500">
@@ -203,11 +207,15 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
   )
 }
 
-function YearPicker({ year, planned, onChange }: { year: number; planned: Years; onChange: (year: number) => void }) {
+/** Holidays lost to weekends, for a year at a workplace. */
+const lostHolidays = (year: number, work: Region) => holidayLuck(buildYear(year, { work, home: work, eves: 'full' })).weekend.length
+
+function YearPicker({ year, planned, work, onChange }: { year: number; planned: Years; work: Region; onChange: (year: number) => void }) {
   const near = [year - 1, year, year + 1]
+  const lucky = useMemo(() => new Set(near.filter((y) => lostHolidays(y, work) === 0)), [year, work])
   const button = 'rounded-full px-2.5 py-1 text-xs font-semibold transition'
   return (
-    <nav className="mt-3 flex items-center gap-1 text-stone-500">
+    <nav className="flex items-center gap-1 text-stone-500">
       <button type="button" onClick={() => onChange(year - 1)} aria-label="Предыдущий год" className={`${button} hover:bg-white/70 hover:text-stone-900`}>
         ‹
       </button>
@@ -219,6 +227,11 @@ function YearPicker({ year, planned, onChange }: { year: number; planned: Years;
           className={`${button} ${y === year ? 'bg-white text-stone-900 shadow-sm' : 'hover:bg-white/70 hover:text-stone-900'}`}
         >
           {y}
+          {lucky.has(y) && (
+            <span className="ml-1" title="все праздники в будни">
+              🍀
+            </span>
+          )}
           {y !== year && planned[y]?.booked.length ? <span className="ml-1 inline-block size-1 rounded-full bg-blush-500 align-middle" /> : null}
         </button>
       ))}
@@ -226,6 +239,36 @@ function YearPicker({ year, planned, onChange }: { year: number; planned: Years;
         ›
       </button>
     </nav>
+  )
+}
+
+const VERDICT = ['Удачный год', 'Хороший год', 'Обычный год', 'Неудачный год']
+
+/** How many holidays at work fall on weekdays this year: one dot per holiday, hollow when lost to a weekend. */
+function LuckBadge({ luck }: { luck: Luck }) {
+  const lost = luck.weekend.length
+  const total = lost + luck.weekday.length
+  const dates = [...new Set(luck.weekend.map((h) => shortDate(h.date)))].join(', ')
+  return (
+    <div className="flex items-center gap-2.5 rounded-full border border-stone-200 bg-white/70 py-1 pr-3 pl-2 text-xs text-stone-500">
+      <span className="flex gap-0.5" aria-hidden>
+        {[...luck.weekday, ...luck.weekend].sort((a, b) => a.date.localeCompare(b.date)).map((h) => (
+          <span
+            key={h.date}
+            title={`${h.name}, ${dayLabel(h.date)}`}
+            className={`size-2 rounded-full ${luck.weekend.includes(h) ? 'ring-1 ring-stone-300 ring-inset' : 'bg-sage-400'}`}
+          />
+        ))}
+      </span>
+      <span>
+        <b className="font-semibold text-stone-800">
+          {lost === 0 && '🍀 '}
+          {VERDICT[Math.min(lost, 3)]}
+        </b>
+        {' · '}
+        {lost === 0 ? `все ${total} праздников в будни` : `${luck.weekday.length} из ${total} в будни, мимо: ${dates}`}
+      </span>
+    </div>
   )
 }
 
@@ -277,9 +320,10 @@ function Legend({ home, view, onView }: { home: string; view: View; onView: (vie
     ['bg-lilac-500/55 !h-[3px] !w-3 rounded-full', `школьные каникулы ${home}`],
   ]
   return (
-    <div className="mb-5 flex flex-wrap items-center justify-between gap-x-6 gap-y-3 px-1 text-xs text-stone-500">
-      {view === 'plan' ? (
-        <div className="flex flex-wrap gap-x-5 gap-y-2">
+    <div className="mb-5 grid grid-cols-1 items-start gap-x-6 gap-y-3 px-1 text-xs text-stone-500 sm:grid-cols-[minmax(0,1fr)_16rem]">
+      {/* Both legends share one cell, so switching views changes neither the height nor the toggle's place. */}
+      <div className="grid">
+        <div className={`col-start-1 row-start-1 flex flex-wrap content-start gap-x-5 gap-y-2 ${view === 'plan' ? '' : 'invisible'}`}>
           {items.map(([swatch, label]) => (
             <span key={label} className="flex items-center gap-2">
               <span className={`size-3 rounded ${swatch}`} />
@@ -287,8 +331,7 @@ function Legend({ home, view, onView }: { home: string; view: View; onView: (vie
             </span>
           ))}
         </div>
-      ) : (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <div className={`col-start-1 row-start-1 flex flex-wrap content-start items-center gap-x-4 gap-y-2 ${view === 'crowd' ? '' : 'invisible'}`}>
           <span>Какая доля Германии на школьных каникулах (по населению земель):</span>
           <span className="flex items-center gap-1">
             {CROWD_STEPS.map((step, i) => (
@@ -303,8 +346,8 @@ function Legend({ home, view, onView }: { home: string; view: View; onView: (vie
             отпуск
           </span>
         </div>
-      )}
-      <div className="w-64">
+      </div>
+      <div className="sm:order-none -order-1">
         <Segmented<View>
           value={view}
           options={[

@@ -13,6 +13,7 @@ export function monthName(year: number, month: number): string {
 }
 
 export const dayLabel = (date: ISODate) => dayFormat.format(parse(date))
+export const shortDate = (date: ISODate) => shortFormat.format(parse(date))
 
 export function rangeLabel(start: ISODate, end: ISODate): string {
   return start === end ? shortFormat.format(parse(start)) : `${shortFormat.format(parse(start))} – ${shortFormat.format(parse(end))}`
