@@ -1,5 +1,5 @@
 import type { PointerEvent } from 'react'
-import type { Day } from '../domain/calendar'
+import { hasRule, type Day } from '../domain/calendar'
 import type { ISODate } from '../domain/dates'
 import { WEEKDAYS, monthName } from '../format'
 import { CrowdPie } from './CrowdPie'
@@ -19,6 +19,8 @@ interface Props {
   onPress: (day: Day, event: PointerEvent) => void
   onEnter: (day: Day) => void
   onKeyToggle: (day: Day) => void
+  /** A right click (or the menu key) on a day the company decides about. */
+  onMenu: (day: Day, x: number, y: number) => void
 }
 
 function cellClass(day: Day, booked: boolean, covered: boolean): string {
@@ -41,7 +43,7 @@ function crowdClass(day: Day, inTrip: boolean): string {
   return `${ink} ${inTrip ? 'ring-2 ring-inset ring-blush-600 font-bold' : ''}`
 }
 
-export function MonthCard({ view, year, month, days, booked, covered, bridges, onPress, onEnter, onKeyToggle }: Props) {
+export function MonthCard({ view, year, month, days, booked, covered, bridges, onPress, onEnter, onKeyToggle, onMenu }: Props) {
   const bookedHere = days.filter((d) => d.kind === 'workday' && booked.has(d.date)).reduce((s, d) => s + d.cost, 0)
   return (
     <section className="rounded-3xl border border-white bg-white/70 p-4 shadow-sm shadow-stone-900/5 backdrop-blur-xl transition hover:shadow-md">
@@ -73,12 +75,19 @@ export function MonthCard({ view, year, month, days, booked, covered, bridges, o
             <button
               key={day.date}
               type="button"
-              tabIndex={clickable ? 0 : -1}
+              tabIndex={hasRule(day) ? 0 : -1}
               aria-pressed={clickable ? isBooked : undefined}
               aria-label={day.date}
               onPointerDown={(e) => onPress(day, e)}
               onPointerEnter={() => onEnter(day)}
               onClick={(e) => e.detail === 0 && clickable && onKeyToggle(day)}
+              onContextMenu={(e) => {
+                if (!hasRule(day)) return
+                e.preventDefault()
+                // The menu key fires this without a pointer position.
+                const box = e.currentTarget.getBoundingClientRect()
+                onMenu(day, e.clientX || box.left, e.clientY || box.bottom)
+              }}
               className={`relative grid aspect-square place-items-center rounded-xl text-[13px] tabular-nums outline-none transition duration-150 select-none focus-visible:ring-2 focus-visible:ring-blush-300 ${look} ${clickable ? '' : 'cursor-default'}`}
             >
               {!plan && <CrowdPie onBreak={day.onBreak} className="absolute inset-[3px]" />}

@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import type { ISODate } from './domain/dates'
-import type { EveRule, Settings } from './domain/calendar'
+import type { CompanyDays, DayRule, Settings } from './domain/calendar'
 import { REGIONS, type Region } from './domain/holidays'
 
-/** One year's settings and booked days. */
+/** One year's settings, booked days and company days. */
 export interface Plan {
   settings: Settings
   booked: ISODate[]
+  /** Dates of this year only, so a new year starts without them. */
+  companyDays: CompanyDays
 }
 
 /** Plans by year ("2027" → plan); years never touched are absent. */
@@ -21,11 +23,11 @@ const DEFAULT_SETTINGS: Settings = { work: 'HE', home: 'RP', entitlement: 30, ca
 const STORAGE_KEY = 'urlaub:plan'
 /** Where the single-year version kept its 2027 plan. */
 const LEGACY_KEY = 'urlaub-2027:plan'
-const EVES: EveRule[] = ['full', 'half', 'off']
+const EVES: DayRule[] = ['full', 'half', 'off']
 
 function sanitize(raw: unknown, year: number): Plan | null {
   if (!raw || typeof raw !== 'object') return null
-  const { settings, booked } = raw as Partial<Plan>
+  const { settings, booked, companyDays } = raw as Partial<Plan>
   if (!settings || !Array.isArray(booked)) return null
   const number = (v: unknown, fallback: number) => (typeof v === 'number' && v >= 0 ? v : fallback)
   const region = (v: unknown, fallback: Region) => (typeof v === 'string' && v in REGIONS ? (v as Region) : fallback)
@@ -33,7 +35,7 @@ function sanitize(raw: unknown, year: number): Plan | null {
   const legacy = (settings as { region?: unknown }).region
   // Before the two eves were separate one `eves` rule covered both.
   const bothEves = (settings as { eves?: unknown }).eves
-  const eve = (v: unknown) => (EVES.includes(v as EveRule) ? (v as EveRule) : EVES.includes(bothEves as EveRule) ? (bothEves as EveRule) : 'full')
+  const eve = (v: unknown) => (EVES.includes(v as DayRule) ? (v as DayRule) : EVES.includes(bothEves as DayRule) ? (bothEves as DayRule) : 'full')
   const date = new RegExp(`^${year}-\\d{2}-\\d{2}$`)
   return {
     settings: {
@@ -45,6 +47,11 @@ function sanitize(raw: unknown, year: number): Plan | null {
       newYearsEve: eve(settings.newYearsEve),
     },
     booked: booked.filter((d): d is ISODate => typeof d === 'string' && date.test(d)).sort(),
+    companyDays: Object.fromEntries(
+      Object.entries(companyDays && typeof companyDays === 'object' ? companyDays : {}).filter(
+        ([d, rule]) => date.test(d) && (rule === 'half' || rule === 'off'),
+      ),
+    ),
   }
 }
 
@@ -84,7 +91,7 @@ export function blankPlan(years: Years, year: number): Plan {
   const earlier = known.filter((y) => y < year)
   const source = earlier.length > 0 ? Math.max(...earlier) : known.length > 0 ? Math.min(...known) : null
   const settings = source === null ? DEFAULT_SETTINGS : years[source].settings
-  return { settings: { ...settings, carryover: 0 }, booked: [] }
+  return { settings: { ...settings, carryover: 0 }, booked: [], companyDays: {} }
 }
 
 function readJSON(key: string): unknown {
@@ -137,6 +144,14 @@ export function usePlan() {
           else next.delete(d)
         }
         return { ...p, booked: [...next].sort() }
+      }),
+    /** 24.12 and 31.12 go to their settings, every other weekday to this year's company days. */
+    setDayRule: (date: ISODate, rule: DayRule) =>
+      update((p) => {
+        if (date.endsWith('-12-24')) return { ...p, settings: { ...p.settings, christmasEve: rule } }
+        if (date.endsWith('-12-31')) return { ...p, settings: { ...p.settings, newYearsEve: rule } }
+        const { [date]: _, ...rest } = p.companyDays
+        return { ...p, companyDays: rule === 'full' ? rest : { ...rest, [date]: rule } }
       }),
     clear: () => update((p) => ({ ...p, booked: [] })),
   }

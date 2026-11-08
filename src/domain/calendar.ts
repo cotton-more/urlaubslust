@@ -2,8 +2,11 @@ import { addDays, iso, utc, weekday, type ISODate } from './dates'
 import { legalHolidays, observances, type Holiday, type Observance, type Region } from './holidays'
 import { crowd, type SchoolBreak } from './schoolBreaks'
 
-/** How the company treats Heiligabend or Silvester when it falls on a weekday. */
-export type EveRule = 'full' | 'half' | 'off'
+/** How the company treats a weekday: a full working day, half a day, or closed. */
+export type DayRule = 'full' | 'half' | 'off'
+
+/** One year's company-specific days (a closed Brückentag, a half day before a party…), beyond 24.12 and 31.12. */
+export type CompanyDays = Partial<Record<ISODate, Exclude<DayRule, 'full'>>>
 
 export interface Settings {
   /** Bundesland of the workplace (Arbeitsort): its holidays are days off. */
@@ -15,9 +18,9 @@ export interface Settings {
   /** Resturlaub carried over from the previous year. */
   carryover: number
   /** Heiligabend, 24.12. */
-  christmasEve: EveRule
+  christmasEve: DayRule
   /** Silvester, 31.12. */
-  newYearsEve: EveRule
+  newYearsEve: DayRule
 }
 
 export type DayKind = 'workday' | 'weekend' | 'holiday' | 'company'
@@ -45,7 +48,17 @@ export interface Day {
   crowd: number
 }
 
-const EVE_COST: Record<EveRule, number> = { full: 1, half: 0.5, off: 0 }
+const RULE_COST: Record<DayRule, number> = { full: 1, half: 0.5, off: 0 }
+
+/** The company rule behind a weekday that is not a legal holiday. */
+export function ruleOf(day: Day): DayRule {
+  return day.kind === 'company' ? 'off' : day.cost < 1 ? 'half' : 'full'
+}
+
+/** Whether the company decides about this day: weekdays that are not legal holidays at work. */
+export function hasRule(day: Day): boolean {
+  return day.kind === 'workday' || day.kind === 'company'
+}
 
 export function isOff(day: Day): boolean {
   return day.kind !== 'workday'
@@ -53,12 +66,18 @@ export function isOff(day: Day): boolean {
 
 export function buildYear(
   year: number,
-  { work, home, christmasEve, newYearsEve }: Pick<Settings, 'work' | 'home' | 'christmasEve' | 'newYearsEve'>,
+  {
+    work,
+    home,
+    christmasEve,
+    newYearsEve,
+    companyDays = {},
+  }: Pick<Settings, 'work' | 'home' | 'christmasEve' | 'newYearsEve'> & { companyDays?: CompanyDays },
   breaks: readonly SchoolBreak[] = [],
 ): Day[] {
   const holidays = new Map(legalHolidays(year).map((h) => [h.date, h]))
   const notable = new Map(observances(year).map((o) => [o.date, o]))
-  const eves = new Map<ISODate, EveRule>([
+  const eves = new Map<ISODate, DayRule>([
     [iso(utc(year, 12, 24)), christmasEve],
     [iso(utc(year, 12, 31)), newYearsEve],
   ])
@@ -74,9 +93,9 @@ export function buildYear(
     let cost = 1
     if (wd >= 5) [kind, cost] = ['weekend', 0]
     else if (local) [kind, cost] = ['holiday', 0]
-    else if (eves.has(date)) {
-      const rule = eves.get(date)!
-      cost = EVE_COST[rule]
+    else {
+      const rule = companyDays[date] ?? eves.get(date) ?? 'full'
+      cost = RULE_COST[rule]
       if (rule === 'off') kind = 'company'
     }
 

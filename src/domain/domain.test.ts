@@ -83,6 +83,18 @@ describe('calendar', () => {
     expect(day('2027-12-31').schoolBreak?.name).toBe('Weihnachtsferien')
   })
 
+  it('applies company days on weekdays, before the rule for 24.12 and 31.12, but never on holidays', () => {
+    const days = buildYear(2027, {
+      ...settings,
+      christmasEve: 'off',
+      companyDays: { '2027-05-07': 'off', '2027-02-08': 'half', '2027-12-24': 'half', '2027-05-06': 'off' },
+    })
+    expect(day('2027-05-07', days)).toMatchObject({ kind: 'company', cost: 0 })
+    expect(day('2027-02-08', days)).toMatchObject({ kind: 'workday', cost: 0.5 })
+    expect(day('2027-12-24', days).cost).toBe(0.5)
+    expect(day('2027-05-06', days)).toMatchObject({ kind: 'holiday', cost: 0 })
+  })
+
   it('applies the company rule for Heiligabend and Silvester separately', () => {
     const days = buildYear(2027, { ...settings, christmasEve: 'half', newYearsEve: 'off' })
     expect(day('2027-12-24', days)).toMatchObject({ kind: 'workday', cost: 0.5 })
@@ -154,8 +166,12 @@ describe('ics export', () => {
 })
 
 describe('plan code', () => {
-  const plan = { settings: { ...settings, carryover: 2.5, christmasEve: 'half' as const }, booked: ['2027-05-18', '2027-03-30'] }
-  const years = { 2027: plan, 2028: { settings, booked: ['2028-01-03'] } }
+  const plan = {
+    settings: { ...settings, carryover: 2.5, christmasEve: 'half' as const },
+    booked: ['2027-05-18', '2027-03-30'],
+    companyDays: { '2027-05-07': 'off' as const },
+  }
+  const years = { 2027: plan, 2028: { settings, booked: ['2028-01-03'], companyDays: {} } }
 
   it('round-trips every year, sorting the days', () => {
     expect(decodePlans(encodePlans(years))).toEqual({ ...years, 2027: { ...plan, booked: ['2027-03-30', '2027-05-18'] } })
@@ -167,7 +183,12 @@ describe('plan code', () => {
   })
 
   it('drops days that belong to another year', () => {
-    expect(decodePlans(encodePlans({ 2027: { settings, booked: ['2027-01-04', '2028-01-03'] } }))?.[2027].booked).toEqual(['2027-01-04'])
+    const code = encodePlans({ 2027: { settings, booked: ['2027-01-04', '2028-01-03'], companyDays: { '2028-01-03': 'off' } } })
+    expect(decodePlans(code)?.[2027]).toMatchObject({ booked: ['2027-01-04'], companyDays: {} })
+  })
+
+  it('reads plans from before company days as having none', () => {
+    expect(decodePlans(btoa(JSON.stringify({ 2027: { settings, booked: [] } })))?.[2027].companyDays).toEqual({})
   })
 
   it('splits the single region of older plans into work there and school breaks from Rheinland-Pfalz', () => {
@@ -252,8 +273,10 @@ describe('school breaks', () => {
 
 describe('years', () => {
   it('starts a new year with the settings of the closest earlier one, without carryover', () => {
-    const years = { 2027: { settings: { ...settings, entitlement: 29, carryover: 3 }, booked: ['2027-01-04'] } }
-    expect(blankPlan(years, 2029)).toEqual({ settings: { ...settings, entitlement: 29, carryover: 0 }, booked: [] })
+    const years = {
+      2027: { settings: { ...settings, entitlement: 29, carryover: 3 }, booked: ['2027-01-04'], companyDays: { '2027-05-07': 'off' as const } },
+    }
+    expect(blankPlan(years, 2029)).toEqual({ settings: { ...settings, entitlement: 29, carryover: 0 }, booked: [], companyDays: {} })
     expect(blankPlan(years, 2026).settings.entitlement).toBe(29)
     expect(blankPlan({}, 2027).booked).toEqual([])
   })

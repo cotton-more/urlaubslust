@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import { buildYear, isOff, type Day } from './domain/calendar'
 import type { ISODate } from './domain/dates'
 import { REGIONS } from './domain/holidays'
@@ -10,6 +10,7 @@ import type { Region } from './domain/holidays'
 import { usePlan, type Years } from './usePlan'
 import { useSchoolBreaks, type BreaksStatus } from './useSchoolBreaks'
 import { CrowdPie } from './components/CrowdPie'
+import { DayMenu } from './components/DayMenu'
 import { MonthCard, type View } from './components/MonthCard'
 import { Segmented } from './components/controls'
 import { Summary } from './components/Summary'
@@ -18,17 +19,19 @@ import { BridgeTips, TripList } from './components/TripList'
 import { TransferPanel } from './components/TransferPanel'
 
 export default function App() {
-  const { year, setYear, years, plan, saved, replaceAll, setSettings, book, clear } = usePlan()
+  const { year, setYear, years, plan, saved, replaceAll, setSettings, setDayRule, book, clear } = usePlan()
   const { settings } = plan
   const [hovered, setHovered] = useState<Day | null>(null)
   const [view, setView] = useState<View>('plan')
+  const [menu, setMenu] = useState<{ day: Day; x: number; y: number } | null>(null)
+  const closeMenu = useCallback(() => setMenu(null), [])
   const drag = useRef<boolean | null>(null)
   const anchor = useRef<ISODate | null>(null)
 
   const schoolBreaks = useSchoolBreaks(year)
   const days = useMemo(
-    () => buildYear(year, settings, schoolBreaks.breaks),
-    [year, settings.work, settings.home, settings.christmasEve, settings.newYearsEve, schoolBreaks.breaks],
+    () => buildYear(year, { ...settings, companyDays: plan.companyDays }, schoolBreaks.breaks),
+    [year, settings.work, settings.home, settings.christmasEve, settings.newYearsEve, plan.companyDays, schoolBreaks.breaks],
   )
   const booked = useMemo(() => new Set(plan.booked), [plan.booked])
   const tripList = useMemo(() => trips(days, booked), [days, booked])
@@ -148,6 +151,7 @@ export default function App() {
                   onPress={press}
                   onEnter={enter}
                   onKeyToggle={(day) => book([day.date], !booked.has(day.date))}
+                  onMenu={(day, x, y) => setMenu({ day, x, y })}
                 />
               ))}
             </div>
@@ -155,7 +159,14 @@ export default function App() {
 
           <aside className="order-first grid min-w-0 grid-cols-1 content-start gap-6 xl:order-none xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:overflow-y-auto xl:pb-4 [scrollbar-width:none]">
             <Summary year={year} usage={stats} daysOff={daysOff} tripCount={tripList.length} />
-            <SettingsPanel year={year} settings={settings} onChange={setSettings} />
+            <SettingsPanel
+              year={year}
+              days={days}
+              settings={settings}
+              companyDays={plan.companyDays}
+              onChange={setSettings}
+              onDayRule={setDayRule}
+            />
             <Section title="Периоды отпуска">
               <TripList trips={tripList} crowdOf={crowdOf} onRemove={removeTrip} />
               {tripList.length > 0 && (
@@ -194,6 +205,7 @@ export default function App() {
         </div>
       </div>
 
+      {menu && <DayMenu {...menu} onPick={(rule) => setDayRule(menu.day.date, rule)} onClose={closeMenu} />}
       <HoverBar day={hovered} booked={hovered ? booked.has(hovered.date) : false} work={REGIONS[settings.work]} home={settings.home} />
     </div>
   )
