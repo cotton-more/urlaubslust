@@ -2,7 +2,7 @@ import { addDays, iso, utc, weekday, type ISODate } from './dates'
 import { legalHolidays, observances, type Holiday, type Observance, type Region } from './holidays'
 import { crowd, type SchoolBreak } from './schoolBreaks'
 
-/** How the company treats Heiligabend and Silvester when they fall on a weekday. */
+/** How the company treats Heiligabend or Silvester when it falls on a weekday. */
 export type EveRule = 'full' | 'half' | 'off'
 
 export interface Settings {
@@ -14,7 +14,10 @@ export interface Settings {
   entitlement: number
   /** Resturlaub carried over from the previous year. */
   carryover: number
-  eves: EveRule
+  /** Heiligabend, 24.12. */
+  christmasEve: EveRule
+  /** Silvester, 31.12. */
+  newYearsEve: EveRule
 }
 
 export type DayKind = 'workday' | 'weekend' | 'holiday' | 'company'
@@ -50,12 +53,15 @@ export function isOff(day: Day): boolean {
 
 export function buildYear(
   year: number,
-  { work, home, eves }: Pick<Settings, 'work' | 'home' | 'eves'>,
+  { work, home, christmasEve, newYearsEve }: Pick<Settings, 'work' | 'home' | 'christmasEve' | 'newYearsEve'>,
   breaks: readonly SchoolBreak[] = [],
 ): Day[] {
   const holidays = new Map(legalHolidays(year).map((h) => [h.date, h]))
   const notable = new Map(observances(year).map((o) => [o.date, o]))
-  const eveDates = new Set([iso(utc(year, 12, 24)), iso(utc(year, 12, 31))])
+  const eves = new Map<ISODate, EveRule>([
+    [iso(utc(year, 12, 24)), christmasEve],
+    [iso(utc(year, 12, 31)), newYearsEve],
+  ])
 
   const days: Day[] = []
   for (let d = utc(year, 1, 1); d.getUTCFullYear() === year; d = addDays(d, 1)) {
@@ -68,9 +74,10 @@ export function buildYear(
     let cost = 1
     if (wd >= 5) [kind, cost] = ['weekend', 0]
     else if (local) [kind, cost] = ['holiday', 0]
-    else if (eveDates.has(date)) {
-      cost = EVE_COST[eves]
-      if (eves === 'off') kind = 'company'
+    else if (eves.has(date)) {
+      const rule = eves.get(date)!
+      cost = EVE_COST[rule]
+      if (rule === 'off') kind = 'company'
     }
 
     const current = breaks.filter((b) => b.start <= date && date <= b.end)

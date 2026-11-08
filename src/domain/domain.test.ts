@@ -8,7 +8,7 @@ import { toICS } from './ics'
 import { blankPlan, decodePlans, encodePlans } from '../usePlan'
 import { crowd, parseSchoolBreaks, schoolBreaksURL } from './schoolBreaks'
 
-const settings: Settings = { work: 'HE', home: 'RP', entitlement: 30, carryover: 0, eves: 'full' }
+const settings: Settings = { work: 'HE', home: 'RP', entitlement: 30, carryover: 0, christmasEve: 'full', newYearsEve: 'full' }
 const RLP_BREAKS_2027 = [
   { name: 'Weihnachtsferien', start: '2026-12-23', end: '2027-01-08', regions: ['RP'] as Region[] },
   { name: 'Osterferien', start: '2027-03-22', end: '2027-04-02', regions: ['RP'] as Region[] },
@@ -83,9 +83,11 @@ describe('calendar', () => {
     expect(day('2027-12-31').schoolBreak?.name).toBe('Weihnachtsferien')
   })
 
-  it('applies the company rule for Heiligabend and Silvester', () => {
-    expect(day('2027-12-24', buildYear(2027, { ...settings, eves: 'half' })).cost).toBe(0.5)
-    expect(day('2027-12-31', buildYear(2027, { ...settings, eves: 'off' }))).toMatchObject({ kind: 'company', cost: 0 })
+  it('applies the company rule for Heiligabend and Silvester separately', () => {
+    const days = buildYear(2027, { ...settings, christmasEve: 'half', newYearsEve: 'off' })
+    expect(day('2027-12-24', days)).toMatchObject({ kind: 'workday', cost: 0.5 })
+    expect(day('2027-12-31', days)).toMatchObject({ kind: 'company', cost: 0 })
+    expect(day('2027-12-31', buildYear(2027, { ...settings, christmasEve: 'off' }))).toMatchObject({ kind: 'workday', cost: 1 })
   })
 })
 
@@ -152,7 +154,7 @@ describe('ics export', () => {
 })
 
 describe('plan code', () => {
-  const plan = { settings: { ...settings, carryover: 2.5, eves: 'half' as const }, booked: ['2027-05-18', '2027-03-30'] }
+  const plan = { settings: { ...settings, carryover: 2.5, christmasEve: 'half' as const }, booked: ['2027-05-18', '2027-03-30'] }
   const years = { 2027: plan, 2028: { settings, booked: ['2028-01-03'] } }
 
   it('round-trips every year, sorting the days', () => {
@@ -171,6 +173,11 @@ describe('plan code', () => {
   it('splits the single region of older plans into work there and school breaks from Rheinland-Pfalz', () => {
     const old = { settings: { region: 'HE', entitlement: 29, carryover: 0, eves: 'full' }, booked: [] }
     expect(decodePlans(btoa(JSON.stringify({ 2027: old })))?.[2027].settings).toMatchObject({ work: 'HE', home: 'RP' })
+  })
+
+  it('applies the single eves rule of older plans to both Heiligabend and Silvester', () => {
+    const old = { settings: { ...settings, christmasEve: undefined, newYearsEve: undefined, eves: 'half' }, booked: [] }
+    expect(decodePlans(btoa(JSON.stringify({ 2027: old })))?.[2027].settings).toMatchObject({ christmasEve: 'half', newYearsEve: 'half' })
   })
 
   it('reads a code from the single-year version', () => {

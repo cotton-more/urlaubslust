@@ -8,6 +8,8 @@ export type View = 'plan' | 'crowd'
 
 /** Crowd fill per fifth of the population, 0 = nobody on break. */
 export const CROWD_STEPS = ['bg-white/50', 'bg-crowd-1', 'bg-crowd-2', 'bg-crowd-3', 'bg-crowd-4', 'bg-crowd-5'] as const
+/** Border of a day off per crowd step, chosen to keep at least 3:1 contrast to that step's fill. */
+const OFF_FRAME = ['after:border-sage-700', 'after:border-sage-700', 'after:border-sage-700', 'after:border-sage-900', 'after:border-sage-900', 'after:border-sage-100'] as const
 export const crowdStep = (share: number) => (share <= 0 ? 0 : Math.min(5, Math.ceil(share * 5)))
 
 interface Props {
@@ -38,7 +40,12 @@ function crowdClass(day: Day, inTrip: boolean): string {
   const step = crowdStep(day.crowd)
   const ink = step === 5 ? 'text-white' : day.kind === 'workday' ? 'text-stone-800' : step >= 3 ? 'text-stone-700' : 'text-stone-500'
   const trip = inTrip ? 'ring-2 ring-inset ring-blush-600 font-bold' : ''
-  return `${CROWD_STEPS[step]} ${ink} ${trip} ${day.kind === 'workday' ? 'cursor-pointer' : ''}`
+  // An inner frame, inset from the edge: it reads on any fill and leaves the edge to the trip ring.
+  const off =
+    day.kind === 'holiday' || day.kind === 'company'
+      ? `font-semibold after:absolute after:inset-[3px] after:rounded-lg after:border-2 ${OFF_FRAME[step]}`
+      : ''
+  return `${CROWD_STEPS[step]} ${ink} ${trip} ${off} ${day.kind === 'workday' ? 'cursor-pointer' : ''}`
 }
 
 export function MonthCard({ view, year, month, days, booked, covered, bridges, onPress, onEnter, onKeyToggle }: Props) {
@@ -83,7 +90,13 @@ export function MonthCard({ view, year, month, days, booked, covered, bridges, o
             >
               {day.dayOfMonth}
               {day.kind === 'workday' && day.cost < 1 && (
-                <span className={`absolute top-0.5 right-1 text-[8px] font-bold ${isBooked && plan ? 'text-white/85' : 'text-butter-800'}`}>½</span>
+                <span
+                  className={`absolute top-0.5 right-1 text-[8px] font-bold ${
+                    !plan ? 'rounded-sm bg-butter-100 px-0.5 leading-[10px] text-butter-800' : isBooked ? 'text-white/85' : 'text-butter-800'
+                  }`}
+                >
+                  ½
+                </span>
               )}
               {plan && day.observance && !day.holiday && (
                 <span className="absolute top-1 left-1 size-1 rounded-full bg-mist-500" />

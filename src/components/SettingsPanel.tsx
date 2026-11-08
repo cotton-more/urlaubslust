@@ -30,18 +30,8 @@ export function SettingsPanel({ year, settings, onChange }: Props) {
           onChange={(home) => onChange({ home })}
         />
       </div>
-      <div className="grid gap-1.5">
-        <span className="text-xs text-stone-500">24.12 и 31.12 в фирме</span>
-        <Segmented<EveRule>
-          value={settings.eves}
-          options={[
-            ['full', 'рабочий'],
-            ['half', '½ дня'],
-            ['off', 'выходной'],
-          ]}
-          onChange={(eves) => onChange({ eves })}
-        />
-      </div>
+      <EveSetting caption="24.12 в фирме" value={settings.christmasEve} onChange={(christmasEve) => onChange({ christmasEve })} />
+      <EveSetting caption="31.12 в фирме" value={settings.newYearsEve} onChange={(newYearsEve) => onChange({ newYearsEve })} />
       <Reveal title="Как считается">
         <div className="mt-2 grid gap-2 pl-3">
           <p>
@@ -59,6 +49,23 @@ export function SettingsPanel({ year, settings, onChange }: Props) {
           <p>Остаток прошлого года нужно взять до 31 марта, иначе он сгорает (§ 7 Abs. 3 BUrlG).</p>
         </div>
       </Reveal>
+    </div>
+  )
+}
+
+function EveSetting({ caption, value, onChange }: { caption: string; value: EveRule; onChange: (rule: EveRule) => void }) {
+  return (
+    <div className="grid gap-1.5">
+      <span className="text-xs text-stone-500">{caption}</span>
+      <Segmented<EveRule>
+        value={value}
+        options={[
+          ['full', 'рабочий'],
+          ['half', '½ дня'],
+          ['off', 'выходной'],
+        ]}
+        onChange={onChange}
+      />
     </div>
   )
 }

@@ -27,7 +27,7 @@ export default function App() {
   const schoolBreaks = useSchoolBreaks(year)
   const days = useMemo(
     () => buildYear(year, settings, schoolBreaks.breaks),
-    [year, settings.work, settings.home, settings.eves, schoolBreaks.breaks],
+    [year, settings.work, settings.home, settings.christmasEve, settings.newYearsEve, schoolBreaks.breaks],
   )
   const booked = useMemo(() => new Set(plan.booked), [plan.booked])
   const tripList = useMemo(() => trips(days, booked), [days, booked])
@@ -208,7 +208,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 }
 
 /** Holidays lost to weekends, for a year at a workplace. */
-const lostHolidays = (year: number, work: Region) => holidayLuck(buildYear(year, { work, home: work, eves: 'full' })).weekend.length
+const lostHolidays = (year: number, work: Region) => holidayLuck(buildYear(year, { work, home: work, christmasEve: 'full', newYearsEve: 'full' })).weekend.length
 
 function YearPicker({ year, planned, work, onChange }: { year: number; planned: Years; work: Region; onChange: (year: number) => void }) {
   const near = [year - 1, year, year + 1]
@@ -360,6 +360,14 @@ function Legend({ home, view, onView }: { home: string; view: View; onView: (vie
           <span className="flex items-center gap-2">
             <span className="size-3 rounded ring-2 ring-blush-600 ring-inset" />
             отпуск
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="size-3 rounded border-2 border-sage-700" />
+            праздник / фирма не работает
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="rounded-sm bg-butter-100 px-0.5 text-[8px] leading-[10px] font-bold text-butter-800">½</span>
+            полдня
           </span>
         </div>
       </div>

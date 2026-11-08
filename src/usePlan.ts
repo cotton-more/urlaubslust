@@ -17,7 +17,7 @@ interface Store {
   years: Years
 }
 
-const DEFAULT_SETTINGS: Settings = { work: 'HE', home: 'RP', entitlement: 30, carryover: 0, eves: 'full' }
+const DEFAULT_SETTINGS: Settings = { work: 'HE', home: 'RP', entitlement: 30, carryover: 0, christmasEve: 'full', newYearsEve: 'full' }
 const STORAGE_KEY = 'urlaub:plan'
 /** Where the single-year version kept its 2027 plan. */
 const LEGACY_KEY = 'urlaub-2027:plan'
@@ -31,6 +31,9 @@ function sanitize(raw: unknown, year: number): Plan | null {
   const region = (v: unknown, fallback: Region) => (typeof v === 'string' && v in REGIONS ? (v as Region) : fallback)
   // Before home and work were separate there was one `region` for work, and school breaks were always RLP's.
   const legacy = (settings as { region?: unknown }).region
+  // Before the two eves were separate one `eves` rule covered both.
+  const bothEves = (settings as { eves?: unknown }).eves
+  const eve = (v: unknown) => (EVES.includes(v as EveRule) ? (v as EveRule) : EVES.includes(bothEves as EveRule) ? (bothEves as EveRule) : 'full')
   const date = new RegExp(`^${year}-\\d{2}-\\d{2}$`)
   return {
     settings: {
@@ -38,7 +41,8 @@ function sanitize(raw: unknown, year: number): Plan | null {
       home: region(settings.home, legacy ? 'RP' : DEFAULT_SETTINGS.home),
       entitlement: number(settings.entitlement, DEFAULT_SETTINGS.entitlement),
       carryover: number(settings.carryover, 0),
-      eves: EVES.includes(settings.eves) ? settings.eves : DEFAULT_SETTINGS.eves,
+      christmasEve: eve(settings.christmasEve),
+      newYearsEve: eve(settings.newYearsEve),
     },
     booked: booked.filter((d): d is ISODate => typeof d === 'string' && date.test(d)).sort(),
   }
