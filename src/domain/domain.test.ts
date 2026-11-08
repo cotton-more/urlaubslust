@@ -6,7 +6,7 @@ import type { Region } from './holidays'
 import { bridgeDays, holidayLuck, trips, usage, workdaysBetween } from './plan'
 import { toICS } from './ics'
 import { blankPlan, decodePlans, encodePlans } from '../usePlan'
-import { crowd, parseSchoolBreaks, schoolBreaksURL } from './schoolBreaks'
+import { crowd, crowdSectors, parseSchoolBreaks, schoolBreaksURL } from './schoolBreaks'
 
 const settings: Settings = { work: 'HE', home: 'RP', entitlement: 30, carryover: 0, christmasEve: 'full', newYearsEve: 'full' }
 const RLP_BREAKS_2027 = [
@@ -226,6 +226,15 @@ describe('school breaks', () => {
     expect(crowd([])).toBe(0)
     expect(crowd(['BW', 'BY', 'BE', 'BB', 'HB', 'HH', 'HE', 'MV', 'NI', 'NW', 'RP', 'SL', 'SN', 'ST', 'SH', 'TH'])).toBeCloseTo(1)
     expect(crowd(['NW'])).toBeCloseTo(0.215, 2)
+  })
+
+  it('draws Germany as one sector per Land, the Länder on break first and largest first', () => {
+    const sectors = crowdSectors(['SL', 'NW'])
+    expect(sectors).toHaveLength(16)
+    expect(sectors.slice(0, 3).map((s) => [s.region, s.onBreak])).toEqual([['NW', true], ['SL', true], ['BY', false]])
+    expect(sectors[1].to).toBeCloseTo(crowd(['SL', 'NW']))
+    expect(sectors.at(-1)?.to).toBeCloseTo(1)
+    expect(sectors.every((s, i) => i === 0 || s.from === sectors[i - 1].to)).toBe(true)
   })
 
   it('tells each day who is on break, and which break is at home', () => {

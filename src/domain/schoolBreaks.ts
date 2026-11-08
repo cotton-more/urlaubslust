@@ -33,6 +33,32 @@ const TOTAL = Object.values(POPULATION).reduce((a, b) => a + b, 0)
 /** Share of Germany's population living in the given Länder, 0–1. */
 export const crowd = (regions: readonly Region[]) => regions.reduce((sum, r) => sum + POPULATION[r], 0) / TOTAL
 
+/** One Land's slice of Germany as a pie; `from` and `to` are shares of the full turn, 0–1. */
+export interface Sector {
+  region: Region
+  from: number
+  to: number
+  onBreak: boolean
+}
+
+/**
+ * Germany as a pie, one sector per Land sized by its population. The Länder on break come first, largest first,
+ * so the filled part grows clockwise from 12 o'clock and covers exactly the crowd share.
+ */
+export function crowdSectors(onBreak: readonly Region[]): Sector[] {
+  const off = new Set(onBreak)
+  const order = (Object.keys(POPULATION) as Region[]).sort(
+    (a, b) => Number(off.has(b)) - Number(off.has(a)) || POPULATION[b] - POPULATION[a],
+  )
+  let from = 0
+  return order.map((region) => {
+    const to = from + POPULATION[region] / TOTAL
+    const sector = { region, from, to, onBreak: off.has(region) }
+    from = to
+    return sector
+  })
+}
+
 /** OpenHolidays (openholidaysapi.org): school holidays of every Bundesland overlapping one year. */
 export function schoolBreaksURL(year: number): string {
   const query = new URLSearchParams({

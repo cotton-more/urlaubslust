@@ -1,7 +1,7 @@
 import type { Day } from '../domain/calendar'
 import type { Trip } from '../domain/plan'
 import { dayLabel, days, rangeLabel } from '../format'
-import { CROWD_STEPS, crowdStep } from './MonthCard'
+import { CrowdPie } from './CrowdPie'
 
 interface TripsProps {
   trips: readonly Trip[]
@@ -31,7 +31,7 @@ export function TripList({ trips, crowdOf, onRemove }: TripsProps) {
               {days(trip.cost)} отпуска → <span className="font-medium text-blush-600">{days(trip.length)} свободы</span>
             </div>
             <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-stone-500">
-              <span className={`size-2 rounded-sm ring-1 ring-stone-200 ring-inset ${CROWD_STEPS[crowdStep(crowdOf(trip))]}`} />
+              <CrowdPie share={crowdOf(trip)} className="size-3" />
               на каникулах в среднем {Math.round(crowdOf(trip) * 100)}% Германии
             </div>
           </div>

@@ -2,15 +2,10 @@ import type { PointerEvent } from 'react'
 import type { Day } from '../domain/calendar'
 import type { ISODate } from '../domain/dates'
 import { WEEKDAYS, monthName } from '../format'
+import { CrowdPie } from './CrowdPie'
 
 /** What the cells show: the vacation plan, or how much of Germany is on school breaks. */
 export type View = 'plan' | 'crowd'
-
-/** Crowd fill per fifth of the population, 0 = nobody on break. */
-export const CROWD_STEPS = ['bg-white/50', 'bg-crowd-1', 'bg-crowd-2', 'bg-crowd-3', 'bg-crowd-4', 'bg-crowd-5'] as const
-/** Border of a day off per crowd step, chosen to keep at least 3:1 contrast to that step's fill. */
-const OFF_FRAME = ['after:border-sage-700', 'after:border-sage-700', 'after:border-sage-700', 'after:border-sage-900', 'after:border-sage-900', 'after:border-sage-100'] as const
-export const crowdStep = (share: number) => (share <= 0 ? 0 : Math.min(5, Math.ceil(share * 5)))
 
 interface Props {
   view: View
@@ -37,15 +32,13 @@ function cellClass(day: Day, booked: boolean, covered: boolean): string {
 }
 
 function crowdClass(day: Day, inTrip: boolean): string {
-  const step = crowdStep(day.crowd)
-  const ink = step === 5 ? 'text-white' : day.kind === 'workday' ? 'text-stone-800' : step >= 3 ? 'text-stone-700' : 'text-stone-500'
-  const trip = inTrip ? 'ring-2 ring-inset ring-blush-600 font-bold' : ''
-  // An inner frame, inset from the edge: it reads on any fill and leaves the edge to the trip ring.
-  const off =
+  const ink =
     day.kind === 'holiday' || day.kind === 'company'
-      ? `font-semibold after:absolute after:inset-[3px] after:rounded-lg after:border-2 ${OFF_FRAME[step]}`
-      : ''
-  return `${CROWD_STEPS[step]} ${ink} ${trip} ${off} ${day.kind === 'workday' ? 'cursor-pointer' : ''}`
+      ? 'bg-sage-100 text-sage-700 font-semibold'
+      : day.kind === 'weekend'
+        ? 'text-stone-500'
+        : 'text-stone-800 cursor-pointer'
+  return `${ink} ${inTrip ? 'ring-2 ring-inset ring-blush-600 font-bold' : ''}`
 }
 
 export function MonthCard({ view, year, month, days, booked, covered, bridges, onPress, onEnter, onKeyToggle }: Props) {
@@ -88,7 +81,8 @@ export function MonthCard({ view, year, month, days, booked, covered, bridges, o
               onClick={(e) => e.detail === 0 && clickable && onKeyToggle(day)}
               className={`relative grid aspect-square place-items-center rounded-xl text-[13px] tabular-nums outline-none transition duration-150 select-none focus-visible:ring-2 focus-visible:ring-blush-300 ${look} ${clickable ? '' : 'cursor-default'}`}
             >
-              {day.dayOfMonth}
+              {!plan && <CrowdPie onBreak={day.onBreak} className="absolute inset-[3px]" />}
+              <span className="relative">{day.dayOfMonth}</span>
               {day.kind === 'workday' && day.cost < 1 && (
                 <span
                   className={`absolute top-0.5 right-1 text-[8px] font-bold ${

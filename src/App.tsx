@@ -9,7 +9,8 @@ import { dayLabel, days as daysWord, rangeLabel, shortDate } from './format'
 import type { Region } from './domain/holidays'
 import { usePlan, type Years } from './usePlan'
 import { useSchoolBreaks, type BreaksStatus } from './useSchoolBreaks'
-import { CROWD_STEPS, MonthCard, type View } from './components/MonthCard'
+import { CrowdPie } from './components/CrowdPie'
+import { MonthCard, type View } from './components/MonthCard'
 import { Segmented } from './components/controls'
 import { Summary } from './components/Summary'
 import { SettingsPanel } from './components/SettingsPanel'
@@ -348,12 +349,12 @@ function Legend({ home, view, onView }: { home: string; view: View; onView: (vie
           ))}
         </div>
         <div className={`col-start-1 row-start-1 flex flex-wrap content-start items-center gap-x-4 gap-y-2 ${view === 'crowd' ? '' : 'invisible'}`}>
-          <span>Какая доля Германии на школьных каникулах (по населению земель):</span>
-          <span className="flex items-center gap-1">
-            {CROWD_STEPS.map((step, i) => (
-              <span key={step} className="grid justify-items-center gap-1">
-                <span className={`h-3 w-8 rounded ${step} ring-1 ring-stone-200 ring-inset`} />
-                <span className="text-[10px] tabular-nums">{i === 0 ? '0' : `≤${i * 20}%`}</span>
+          <span>Круг — вся Германия, сектор — земля по числу жителей; закрашены земли на школьных каникулах:</span>
+          <span className="flex items-center gap-2">
+            {[0, 0.25, 0.5, 0.75, 1].map((share) => (
+              <span key={share} className="grid justify-items-center gap-1">
+                <CrowdPie share={share} className="size-4" />
+                <span className="text-[10px] tabular-nums">{share * 100}%</span>
               </span>
             ))}
           </span>
@@ -362,7 +363,7 @@ function Legend({ home, view, onView }: { home: string; view: View; onView: (vie
             отпуск
           </span>
           <span className="flex items-center gap-2">
-            <span className="size-3 rounded border-2 border-sage-700" />
+            <span className="size-3 rounded bg-sage-100 ring-1 ring-sage-300 ring-inset" />
             праздник / фирма не работает
           </span>
           <span className="flex items-center gap-2">
