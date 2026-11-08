@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react'
+import { Disclosure, DisclosureButton, DisclosurePanel, Popover, PopoverButton, PopoverPanel } from '@headlessui/react'
 import { buildYear, isOff, type Day } from './domain/calendar'
 import type { ISODate } from './domain/dates'
 import { REGIONS } from './domain/holidays'
@@ -12,7 +13,8 @@ import { useSchoolBreaks, type BreaksStatus } from './useSchoolBreaks'
 import { CrowdPie } from './components/CrowdPie'
 import { DayMenu } from './components/DayMenu'
 import { MonthCard, type View } from './components/MonthCard'
-import { Segmented } from './components/controls'
+import { ScrollPanel } from './components/ScrollPanel'
+import { Reveal, Segmented } from './components/controls'
 import { Summary } from './components/Summary'
 import { SettingsPanel } from './components/SettingsPanel'
 import { BridgeTips, LongStretches, TripList } from './components/TripList'
@@ -94,14 +96,14 @@ export default function App() {
   const daysOff = tripList.reduce((sum, t) => sum + t.length, 0)
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden">
+    <div className="relative min-h-screen overflow-x-clip">
       <div aria-hidden className="pointer-events-none fixed inset-0">
         <div className="absolute -top-40 -left-32 size-[34rem] rounded-full bg-blush-200/50 blur-[120px]" />
         <div className="absolute top-1/3 -right-40 size-[30rem] rounded-full bg-peach-200/50 blur-[120px]" />
         <div className="absolute -bottom-40 left-1/3 size-[30rem] rounded-full bg-lilac-200/50 blur-[120px]" />
       </div>
 
-      <div className="relative mx-auto max-w-[1600px] px-4 py-8 sm:px-8">
+      <div className="relative mx-auto max-w-[1200px] px-4 py-8 sm:px-8">
         <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="mb-2 text-xs font-semibold tracking-[0.3em] text-stone-500 uppercase">
@@ -133,11 +135,12 @@ export default function App() {
           </div>
         </header>
 
-        <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <main>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          {/* A container, so the month columns follow the calendar's own width rather than the window's. */}
+          <main className="@container min-w-0">
             <Legend home={settings.home} view={view} onView={setView} />
             <div
-              className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4"
+              className="grid grid-cols-1 gap-3 @xl:grid-cols-2 @3xl:grid-cols-3"
               onPointerLeave={() => setHovered(null)}
             >
               {Array.from({ length: 12 }, (_, month) => (
@@ -160,62 +163,65 @@ export default function App() {
             </div>
           </main>
 
-          <aside className="order-first grid min-w-0 grid-cols-1 content-start gap-6 xl:order-none xl:sticky xl:top-8 xl:max-h-[calc(100vh-4rem)] xl:overflow-y-auto xl:pb-4 [scrollbar-width:none]">
-            <Summary year={year} usage={stats} daysOff={daysOff} tripCount={tripList.length} />
-            <SettingsPanel
-              year={year}
-              days={days}
-              settings={settings}
-              companyDays={plan.companyDays}
-              onChange={setSettings}
-              onDayRule={setDayRule}
-            />
-            <Section title="Периоды отпуска">
-              <TripList trips={tripList} crowdOf={crowdOf} onRemove={removeTrip} />
-              {tripList.length > 0 && (
-                <div className="grid gap-2">
-                  <button
-                    type="button"
-                    onClick={exportICS}
-                    className="flex items-center justify-center gap-2 rounded-2xl bg-linear-to-r from-blush-600 to-peach-600 px-4 py-3 text-sm font-semibold text-white shadow-md shadow-blush-600/25 transition hover:shadow-blush-600/40 active:scale-[0.98]"
-                  >
-                    <span aria-hidden>📅</span> Скачать для календаря (.ics)
-                  </button>
-                  <p className="px-1 text-xs leading-relaxed text-stone-500">
-                    Google Календарь → ⚙ Настройки → Импорт и экспорт → выбрать файл. Удобно импортировать в отдельный
-                    календарь «Отпуск» — его легко очистить и залить заново.
-                  </p>
-                </div>
+          <aside className="min-w-0 lg:sticky lg:top-8 lg:self-start">
+            <ScrollPanel>
+              <Summary year={year} usage={stats} daysOff={daysOff} tripCount={tripList.length} />
+              <Section title="Периоды отпуска">
+                <TripList trips={tripList} crowdOf={crowdOf} onRemove={removeTrip} />
+                {tripList.length > 0 && (
+                  <div className="grid gap-2">
+                    <button
+                      type="button"
+                      onClick={exportICS}
+                      className="flex items-center justify-center gap-2 rounded-2xl bg-linear-to-r from-blush-600 to-peach-600 px-4 py-3 text-sm font-semibold text-white shadow-md shadow-blush-600/25 transition hover:shadow-blush-600/40 active:scale-[0.98]"
+                    >
+                      <span aria-hidden>📅</span> Скачать для календаря (.ics)
+                    </button>
+                    <Reveal title="Как добавить в Google Календарь">
+                      <p className="mt-2 pl-3">
+                        ⚙ Настройки → Импорт и экспорт → выбрать файл. Удобно импортировать в отдельный календарь «Отпуск» —
+                        его легко очистить и залить заново.
+                      </p>
+                    </Reveal>
+                  </div>
+                )}
+              </Section>
+              {(stretches.length > 0 || tips.length > 0) && (
+                <Section title="Подсказки">
+                  {stretches.length > 0 && (
+                    <LongStretches
+                      stretches={stretches}
+                      onHover={setHighlight}
+                      onTake={(day) => {
+                        book([day.date], true)
+                        setHighlight(null)
+                      }}
+                    />
+                  )}
+                  <BridgeTips tips={tips} onTake={(day) => book([day.date], true)} />
+                </Section>
               )}
-            </Section>
-            {stretches.length > 0 && (
-              <Section title="Долго без отдыха">
-                <LongStretches
-                  stretches={stretches}
-                  onHover={setHighlight}
-                  onTake={(day) => {
-                    book([day.date], true)
-                    setHighlight(null)
-                  }}
+              <SettingsPanel
+                year={year}
+                days={days}
+                settings={settings}
+                companyDays={plan.companyDays}
+                onChange={setSettings}
+                onDayRule={setDayRule}
+                open={Object.keys(years).length === 0}
+              />
+              <Section title={`Школьные каникулы · ${settings.home}`} folded>
+                <SchoolBreaks
+                  year={year}
+                  region={REGIONS[settings.home]}
+                  status={schoolBreaks.status}
+                  breaks={schoolBreaks.breaks.filter((b) => b.regions.includes(settings.home))}
                 />
               </Section>
-            )}
-            <Section title="Другое устройство">
-              <TransferPanel years={years} onImport={replaceAll} />
-            </Section>
-            <Section title={`Школьные каникулы · ${settings.home}`}>
-              <SchoolBreaks
-                year={year}
-                region={REGIONS[settings.home]}
-                status={schoolBreaks.status}
-                breaks={schoolBreaks.breaks.filter((b) => b.regions.includes(settings.home))}
-              />
-            </Section>
-            {tips.length > 0 && (
-              <Section title="Brückentage">
-                <BridgeTips tips={tips} onTake={(day) => book([day.date], true)} />
+              <Section title="Другое устройство" folded>
+                <TransferPanel years={years} onImport={replaceAll} />
               </Section>
-            )}
+            </ScrollPanel>
           </aside>
         </div>
       </div>
@@ -226,12 +232,35 @@ export default function App() {
   )
 }
 
-function Section({ title, children }: { title: string; children: ReactNode }) {
+const SECTION_TITLE = 'px-1 text-xs font-semibold tracking-[0.2em] text-stone-500 uppercase'
+
+/**
+ * A titled block of the sidebar; `folded` ones are reference material that opens on a click.
+ * The scroll pill names it by the title's first part, before any " · ".
+ */
+function Section({ title, folded = false, children }: { title: string; folded?: boolean; children: ReactNode }) {
+  if (!folded)
+    return (
+      <section data-title={title.split(' · ')[0]} className="grid gap-3">
+        <h3 className={SECTION_TITLE}>{title}</h3>
+        {children}
+      </section>
+    )
   return (
-    <section className="grid gap-3">
-      <h3 className="px-1 text-xs font-semibold tracking-[0.2em] text-stone-500 uppercase">{title}</h3>
-      {children}
-    </section>
+    <Disclosure as="section" data-title={title.split(' · ')[0]} className="grid gap-3">
+      <DisclosureButton className="group flex cursor-pointer items-center gap-2 rounded-lg text-left outline-none data-focus:ring-4 data-focus:ring-blush-200/60">
+        <h3 className={`${SECTION_TITLE} flex-1 transition group-hover:text-stone-800`}>{title}</h3>
+        <svg viewBox="0 0 20 20" className="mr-1 size-4 shrink-0 text-stone-400 transition group-data-open:rotate-180" aria-hidden>
+          <path d="M5 8l5 5 5-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </DisclosureButton>
+      <DisclosurePanel
+        transition
+        className="grid origin-top gap-3 transition duration-200 ease-out data-closed:-translate-y-1 data-closed:opacity-0"
+      >
+        {children}
+      </DisclosurePanel>
+    </Disclosure>
   )
 }
 
@@ -365,42 +394,65 @@ function Legend({ home, view, onView }: { home: string; view: View; onView: (vie
     ['bg-lilac-500/55 !h-[3px] !w-3 rounded-full', `школьные каникулы ${home}`],
   ]
   return (
-    <div className="mb-5 grid grid-cols-1 items-start gap-x-6 gap-y-3 px-1 text-xs text-stone-500 sm:grid-cols-[minmax(0,1fr)_16rem]">
-      {/* Both legends share one cell, so switching views changes neither the height nor the toggle's place. */}
-      <div className="grid">
-        <div className={`col-start-1 row-start-1 flex flex-wrap content-start gap-x-5 gap-y-2 ${view === 'plan' ? '' : 'invisible'}`}>
-          {items.map(([swatch, label]) => (
-            <span key={label} className="flex items-center gap-2">
-              <span className={`size-3 rounded ${swatch}`} />
-              {label}
-            </span>
-          ))}
-        </div>
-        <div className={`col-start-1 row-start-1 flex flex-wrap content-start items-center gap-x-4 gap-y-2 ${view === 'crowd' ? '' : 'invisible'}`}>
-          <span>Круг — вся Германия, сектор — земля по числу жителей; закрашены земли на школьных каникулах:</span>
-          <span className="flex items-center gap-2">
-            {[0, 0.25, 0.5, 0.75, 1].map((share) => (
-              <span key={share} className="grid justify-items-center gap-1">
-                <CrowdPie share={share} className="size-4" />
-                <span className="text-[10px] tabular-nums">{share * 100}%</span>
+    <div className="mb-4 flex items-center justify-between gap-4 px-1">
+      <Popover className="relative">
+        <PopoverButton className="flex cursor-pointer items-center gap-2 rounded-full border border-stone-200 bg-white/70 px-3 py-1.5 text-xs text-stone-600 transition outline-none hover:border-blush-200 hover:text-stone-900 data-focus:ring-4 data-focus:ring-blush-200/60 data-open:border-blush-300">
+          <span className="flex -space-x-1" aria-hidden>
+            <span className="size-2.5 rounded-full bg-linear-to-br from-blush-600 to-peach-600 ring-2 ring-white" />
+            <span className="size-2.5 rounded-full bg-sage-300 ring-2 ring-white" />
+            <span className="size-2.5 rounded-full bg-butter-500 ring-2 ring-white" />
+          </span>
+          Обозначения
+        </PopoverButton>
+        <PopoverPanel
+          anchor={{ to: 'bottom start', gap: 8 }}
+          transition
+          className="z-20 w-80 origin-top-left rounded-2xl border border-white bg-white/95 p-4 text-xs text-stone-600 shadow-xl shadow-stone-900/15 backdrop-blur-xl transition duration-150 ease-out data-closed:scale-95 data-closed:opacity-0"
+        >
+          {view === 'plan' ? (
+            <ul className="grid gap-2">
+              {items.map(([swatch, label]) => (
+                <li key={label} className="flex items-center gap-2.5">
+                  <span className="grid size-3.5 place-items-center">
+                    <span className={`size-3 rounded ${swatch}`} />
+                  </span>
+                  {label}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="grid gap-3">
+              <p>Круг — вся Германия, сектор — земля по числу жителей; закрашены земли на школьных каникулах.</p>
+              <span className="flex items-center gap-3">
+                {[0, 0.25, 0.5, 0.75, 1].map((share) => (
+                  <span key={share} className="grid justify-items-center gap-1">
+                    <CrowdPie share={share} className="size-5" />
+                    <span className="text-[10px] tabular-nums">{share * 100}%</span>
+                  </span>
+                ))}
               </span>
-            ))}
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="size-3 rounded ring-2 ring-blush-600 ring-inset" />
-            отпуск
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="size-3 rounded bg-sage-100 ring-1 ring-sage-300 ring-inset" />
-            праздник / фирма не работает
-          </span>
-          <span className="flex items-center gap-2">
-            <span className="rounded-sm bg-butter-100 px-0.5 text-[8px] leading-[10px] font-bold text-butter-800">½</span>
-            полдня
-          </span>
-        </div>
-      </div>
-      <div className="sm:order-none -order-1">
+              <ul className="grid gap-2">
+                <li className="flex items-center gap-2.5">
+                  <span className="size-3 rounded ring-2 ring-blush-600 ring-inset" />
+                  отпуск
+                </li>
+                <li className="flex items-center gap-2.5">
+                  <span className="size-3 rounded bg-sage-100 ring-1 ring-sage-300 ring-inset" />
+                  праздник / фирма не работает
+                </li>
+                <li className="flex items-center gap-2.5">
+                  <span className="rounded-sm bg-butter-100 px-0.5 text-[8px] leading-[10px] font-bold text-butter-800">½</span>
+                  полдня
+                </li>
+              </ul>
+            </div>
+          )}
+          <p className="mt-3 border-t border-stone-100 pt-3 text-stone-500">
+            Клик или протянуть мышкой — отпуск. Правый клик по дню — полдня, выходной или рабочий день в фирме.
+          </p>
+        </PopoverPanel>
+      </Popover>
+      <div className="w-64">
         <Segmented<View>
           value={view}
           options={[

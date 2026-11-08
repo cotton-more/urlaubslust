@@ -49,10 +49,11 @@ export function MonthCard({ view, year, month, days, booked, covered, bridges, h
   const bookedHere = days.filter((d) => d.kind === 'workday' && booked.has(d.date)).reduce((s, d) => s + d.cost, 0)
   return (
     <section className="rounded-3xl border border-white bg-white/70 p-4 shadow-sm shadow-stone-900/5 backdrop-blur-xl transition hover:shadow-md">
-      <header className="mb-3 flex items-baseline justify-between px-1">
+      {/* A fixed height, so the badge appearing with the first booked day does not push the days down. */}
+      <header className="mb-3 flex h-5 items-center justify-between px-1">
         <h2 className="font-display text-sm font-medium tracking-wide text-stone-800">{monthName(year, month)}</h2>
         {bookedHere > 0 && (
-          <span className="rounded-full bg-blush-100 px-2 py-0.5 text-[11px] font-semibold text-blush-700">
+          <span className="rounded-full bg-blush-100 px-2 text-[11px] leading-5 font-semibold text-blush-700">
             {bookedHere.toLocaleString('ru-RU')} д.
           </span>
         )}

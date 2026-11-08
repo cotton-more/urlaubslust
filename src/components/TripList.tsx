@@ -2,6 +2,7 @@ import type { Day } from '../domain/calendar'
 import type { Stretch, Trip } from '../domain/plan'
 import { dayLabel, days, rangeLabel, weeks } from '../format'
 import { CrowdPie } from './CrowdPie'
+import { Reveal } from './controls'
 
 interface TripsProps {
   trips: readonly Trip[]
@@ -120,10 +121,12 @@ export function LongStretches({ stretches, onTake, onHover }: StretchProps) {
           </li>
         ))}
       </ul>
-      <p className="px-1 text-xs leading-relaxed text-stone-500">
-        Отдых от отпуска проходит за 2–4 недели после возвращения, поэтому лучше не работать дольше 8–12 недель
-        подряд хотя бы без длинных выходных. Здесь — периоды дольше 10 недель без трёх свободных дней подряд.
-      </p>
+      <Reveal title="Почему это важно">
+        <p className="mt-2 pl-3 text-xs leading-relaxed text-stone-500">
+          Эффект отпуска проходит за 2–4 недели после возвращения, поэтому лучше не работать дольше 8–12 недель подряд
+          хотя бы без длинных выходных. Здесь — периоды дольше 10 недель без трёх свободных дней подряд.
+        </p>
+      </Reveal>
     </div>
   )
 }
