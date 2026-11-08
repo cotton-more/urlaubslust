@@ -32,5 +32,8 @@ function plural(n: number, one: string, few: string, many: string): string {
 /** «1 день», «2 дня», «5 дней», «1,5 дня». */
 export const days = (n: number) => plural(n, 'день', 'дня', 'дней')
 
+/** «1 неделя», «2 недели», «5 недель». */
+export const weeks = (n: number) => plural(n, 'неделя', 'недели', 'недель')
+
 /** «1 период», «2 периода», «5 периодов». */
 export const periods = (n: number) => plural(n, 'период', 'периода', 'периодов')

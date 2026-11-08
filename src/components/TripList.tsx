@@ -1,6 +1,6 @@
 import type { Day } from '../domain/calendar'
-import type { Trip } from '../domain/plan'
-import { dayLabel, days, rangeLabel } from '../format'
+import type { Stretch, Trip } from '../domain/plan'
+import { dayLabel, days, rangeLabel, weeks } from '../format'
 import { CrowdPie } from './CrowdPie'
 
 interface TripsProps {
@@ -77,5 +77,53 @@ export function BridgeTips({ tips, onTake }: TipsProps) {
         </li>
       ))}
     </ul>
+  )
+}
+
+interface StretchProps {
+  stretches: readonly Stretch[]
+  onTake: (day: Day) => void
+  /** The stretch under the pointer, to light it up in the calendar; null when the pointer leaves. */
+  onHover: (stretch: Stretch | null) => void
+}
+
+/** Long stretches without a break, each with the one day that breaks it best. */
+export function LongStretches({ stretches, onTake, onHover }: StretchProps) {
+  return (
+    <div className="grid gap-2">
+      <ul className="grid gap-2">
+        {stretches.map((stretch) => (
+          <li
+            key={stretch.start}
+            onPointerEnter={() => onHover(stretch)}
+            onPointerLeave={() => onHover(null)}
+            className="grid gap-1.5 rounded-2xl bg-berry-400/10 px-4 py-2.5 ring-1 ring-inset ring-berry-400/20"
+          >
+            <div className="text-xs">
+              <span className="font-semibold text-berry-600">{weeks(Math.round(stretch.length / 7))} без отдыха</span>
+              <span className="text-stone-500"> · {rangeLabel(stretch.start, stretch.end)}</span>
+            </div>
+            {stretch.tip && (
+              <div className="flex items-center gap-3">
+                <div className="min-w-0 flex-1 truncate text-xs text-stone-600">
+                  {dayLabel(stretch.tip.day.date)} · 1 день → {days(stretch.tip.gain)} отдыха
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onTake(stretch.tip!.day)}
+                  className="rounded-full bg-berry-400/20 px-3 py-1 text-xs font-semibold text-berry-600 transition hover:bg-berry-400/30"
+                >
+                  взять
+                </button>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+      <p className="px-1 text-xs leading-relaxed text-stone-500">
+        Отдых от отпуска проходит за 2–4 недели после возвращения, поэтому лучше не работать дольше 8–12 недель
+        подряд хотя бы без длинных выходных. Здесь — периоды дольше 10 недель без трёх свободных дней подряд.
+      </p>
+    </div>
   )
 }

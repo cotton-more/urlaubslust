@@ -90,3 +90,59 @@ export function holidayLuck(days: readonly Day[]): Luck {
   for (const day of days) if (day.holiday) luck[day.weekday >= 5 ? 'weekend' : 'weekday'].push(day.holiday)
   return luck
 }
+
+/** Days off in a row that count as a break: a long weekend at least. Plain weekends do not. */
+export const BREAK_DAYS = 3
+/** A stretch without a break longer than this gets a warning: the rest of a vacation wears off within weeks. */
+export const LONG_STRETCH_DAYS = 10 * 7
+
+/** A long stretch of work without a break, and the one vacation day that breaks it best. */
+export interface Stretch {
+  start: ISODate
+  end: ISODate
+  /** Calendar days, start and end included. */
+  length: number
+  tip?: { day: Day; /** days off in a row the tip makes */ gain: number }
+}
+
+/**
+ * Stretches of the year longer than LONG_STRETCH_DAYS without BREAK_DAYS off in a row. Booked days count as off.
+ * The tip is a single full working day that makes a break of its own, picked to split the stretch most evenly.
+ */
+export function longStretches(days: readonly Day[], booked: ReadonlySet<ISODate>): Stretch[] {
+  const free = days.map((d) => isOff(d) || booked.has(d.date))
+  // Length of the free run ending at i (from the left) and starting at i (from the right).
+  const left = free.map(() => 0)
+  const right = free.map(() => 0)
+  for (let i = 0; i < days.length; i++) left[i] = free[i] ? (left[i - 1] ?? 0) + 1 : 0
+  for (let i = days.length - 1; i >= 0; i--) right[i] = free[i] ? (right[i + 1] ?? 0) + 1 : 0
+  const inBreak = free.map((f, i) => f && left[i] + right[i] - 1 >= BREAK_DAYS)
+
+  const result: Stretch[] = []
+  let from: number | null = null
+  for (let i = 0; i <= days.length; i++) {
+    if (i < days.length && !inBreak[i]) {
+      from ??= i
+      continue
+    }
+    if (from !== null && i - from > LONG_STRETCH_DAYS) result.push(stretch(days, free, left, right, from, i - 1))
+    from = null
+  }
+  return result
+}
+
+function stretch(days: readonly Day[], free: boolean[], left: number[], right: number[], from: number, to: number): Stretch {
+  let tip: Stretch['tip']
+  let best = -1
+  for (let i = from; i <= to; i++) {
+    const day = days[i]
+    if (free[i] || day.cost < 1) continue
+    const gain = (left[i - 1] ?? 0) + 1 + (right[i + 1] ?? 0)
+    if (gain < BREAK_DAYS) continue
+    // The shorter of the two parts left over: the larger, the more even the split.
+    const shorter = Math.min(i - (left[i - 1] ?? 0) - from, to - (i + (right[i + 1] ?? 0)))
+    const score = shorter * 10 + gain
+    if (score > best) [best, tip] = [score, { day, gain }]
+  }
+  return { start: days[from].date, end: days[to].date, length: to - from + 1, tip }
+}

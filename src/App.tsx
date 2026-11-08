@@ -4,7 +4,7 @@ import type { ISODate } from './domain/dates'
 import { REGIONS } from './domain/holidays'
 import { POPULATION, type SchoolBreak } from './domain/schoolBreaks'
 import { toICS } from './domain/ics'
-import { bridgeDays, holidayLuck, trips, usage, workdaysBetween, type Luck, type Trip } from './domain/plan'
+import { bridgeDays, holidayLuck, longStretches, trips, usage, workdaysBetween, type Luck, type Stretch, type Trip } from './domain/plan'
 import { dayLabel, days as daysWord, rangeLabel, shortDate } from './format'
 import type { Region } from './domain/holidays'
 import { usePlan, type Years } from './usePlan'
@@ -15,7 +15,7 @@ import { MonthCard, type View } from './components/MonthCard'
 import { Segmented } from './components/controls'
 import { Summary } from './components/Summary'
 import { SettingsPanel } from './components/SettingsPanel'
-import { BridgeTips, TripList } from './components/TripList'
+import { BridgeTips, LongStretches, TripList } from './components/TripList'
 import { TransferPanel } from './components/TransferPanel'
 
 export default function App() {
@@ -25,6 +25,7 @@ export default function App() {
   const [view, setView] = useState<View>('plan')
   const [menu, setMenu] = useState<{ day: Day; x: number; y: number } | null>(null)
   const closeMenu = useCallback(() => setMenu(null), [])
+  const [highlight, setHighlight] = useState<Stretch | null>(null)
   const drag = useRef<boolean | null>(null)
   const anchor = useRef<ISODate | null>(null)
 
@@ -47,6 +48,7 @@ export default function App() {
   }, [days, tripList])
   const bridges = useMemo(() => bridgeDays(days), [days])
   const bridgeDates = useMemo(() => new Set(bridges.map((d) => d.date)), [bridges])
+  const stretches = useMemo(() => longStretches(days, booked), [days, booked])
   const tips = useMemo(
     () =>
       bridges
@@ -148,6 +150,7 @@ export default function App() {
                   booked={booked}
                   covered={covered}
                   bridges={bridgeDates}
+                  highlight={highlight}
                   onPress={press}
                   onEnter={enter}
                   onKeyToggle={(day) => book([day.date], !booked.has(day.date))}
@@ -185,6 +188,18 @@ export default function App() {
                 </div>
               )}
             </Section>
+            {stretches.length > 0 && (
+              <Section title="Долго без отдыха">
+                <LongStretches
+                  stretches={stretches}
+                  onHover={setHighlight}
+                  onTake={(day) => {
+                    book([day.date], true)
+                    setHighlight(null)
+                  }}
+                />
+              </Section>
+            )}
             <Section title="Другое устройство">
               <TransferPanel years={years} onImport={replaceAll} />
             </Section>

@@ -3,7 +3,7 @@ import { iso } from './dates'
 import { easterSunday, legalHolidays } from './holidays'
 import { buildYear, type Settings } from './calendar'
 import type { Region } from './holidays'
-import { bridgeDays, holidayLuck, trips, usage, workdaysBetween } from './plan'
+import { bridgeDays, holidayLuck, longStretches, trips, usage, workdaysBetween } from './plan'
 import { toICS } from './ics'
 import { blankPlan, decodePlans, encodePlans, withDayRule } from '../usePlan'
 import { crowd, crowdSectors, parseSchoolBreaks, schoolBreaksURL } from './schoolBreaks'
@@ -276,6 +276,31 @@ describe('school breaks', () => {
     expect(day('2027-08-02', days).onBreak).toEqual(['RP', 'SL', 'NW'])
     expect(day('2027-08-20', days)).toMatchObject({ onBreak: ['NW'], schoolBreak: undefined })
     expect(day('2027-08-20', days).crowd).toBeCloseTo(crowd(['NW']))
+  })
+})
+
+describe('long stretches', () => {
+  it('finds stretches over ten weeks without a long weekend, ignoring plain weekends', () => {
+    // Hessen 2027 with 24.12 and 31.12 worked: after Neujahr nothing until Easter, after Pfingsten nothing at all
+    // (Fronleichnam on a Thursday alone and Christmas on a weekend make no break).
+    expect(longStretches(hessen, new Set()).map((s) => [s.start, s.end])).toEqual([
+      ['2027-01-04', '2027-03-25'],
+      ['2027-05-18', '2027-12-31'],
+    ])
+  })
+
+  it('suggests one day that makes a long weekend near the middle, and splitting there leaves no long stretch', () => {
+    const autumn = longStretches(hessen, new Set())[1]
+    const tip = autumn.tip!
+    expect(tip.gain).toBeGreaterThanOrEqual(3)
+    expect(tip.day.date > '2027-08-15' && tip.day.date < '2027-10-01').toBe(true)
+    const after = longStretches(hessen, new Set([tip.day.date])).filter((s) => s.start >= autumn.start)
+    expect(after.every((s) => s.length <= autumn.length / 2 + 7)).toBe(true)
+  })
+
+  it('counts a booked week as a break', () => {
+    const booked = new Set(workdaysBetween(hessen, '2027-08-30', '2027-09-03'))
+    expect(longStretches(hessen, booked).some((s) => s.start <= '2027-09-01' && s.end >= '2027-09-01')).toBe(false)
   })
 })
 

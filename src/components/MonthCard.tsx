@@ -16,6 +16,8 @@ interface Props {
   /** Days off that belong to a trip without being booked: the weekends and holidays inside it. */
   covered: ReadonlySet<ISODate>
   bridges: ReadonlySet<ISODate>
+  /** A stretch to point out, while its warning is hovered. */
+  highlight: { start: ISODate; end: ISODate } | null
   onPress: (day: Day, event: PointerEvent) => void
   onEnter: (day: Day) => void
   onKeyToggle: (day: Day) => void
@@ -43,7 +45,7 @@ function crowdClass(day: Day, inTrip: boolean): string {
   return `${ink} ${inTrip ? 'ring-2 ring-inset ring-blush-600 font-bold' : ''}`
 }
 
-export function MonthCard({ view, year, month, days, booked, covered, bridges, onPress, onEnter, onKeyToggle, onMenu }: Props) {
+export function MonthCard({ view, year, month, days, booked, covered, bridges, highlight, onPress, onEnter, onKeyToggle, onMenu }: Props) {
   const bookedHere = days.filter((d) => d.kind === 'workday' && booked.has(d.date)).reduce((s, d) => s + d.cost, 0)
   return (
     <section className="rounded-3xl border border-white bg-white/70 p-4 shadow-sm shadow-stone-900/5 backdrop-blur-xl transition hover:shadow-md">
@@ -90,6 +92,9 @@ export function MonthCard({ view, year, month, days, booked, covered, bridges, o
               className={`relative grid aspect-square place-items-center rounded-xl text-[13px] tabular-nums transition duration-150 select-none focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blush-300 ${look} ${clickable ? '' : 'cursor-default'}`}
             >
               {!plan && <CrowdPie onBreak={day.onBreak} className="absolute inset-[3px]" />}
+              {highlight && day.date >= highlight.start && day.date <= highlight.end && (
+                <span className="absolute inset-0 rounded-xl bg-berry-400/20 ring-1 ring-berry-400/30 ring-inset" />
+              )}
               <span className="relative">{day.dayOfMonth}</span>
               {day.kind === 'workday' && day.cost < 1 && (
                 <span
