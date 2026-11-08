@@ -5,7 +5,7 @@ import { buildYear, type Settings } from './calendar'
 import type { Region } from './holidays'
 import { bridgeDays, holidayLuck, trips, usage, workdaysBetween } from './plan'
 import { toICS } from './ics'
-import { blankPlan, decodePlans, encodePlans } from '../usePlan'
+import { blankPlan, decodePlans, encodePlans, withDayRule } from '../usePlan'
 import { crowd, crowdSectors, parseSchoolBreaks, schoolBreaksURL } from './schoolBreaks'
 
 const settings: Settings = { work: 'HE', home: 'RP', entitlement: 30, carryover: 0, christmasEve: 'full', newYearsEve: 'full' }
@@ -93,6 +93,14 @@ describe('calendar', () => {
     expect(day('2027-02-08', days)).toMatchObject({ kind: 'workday', cost: 0.5 })
     expect(day('2027-12-24', days).cost).toBe(0.5)
     expect(day('2027-05-06', days)).toMatchObject({ kind: 'holiday', cost: 0 })
+  })
+
+  it('lets a weekend or holiday be worked, costing vacation like any working day', () => {
+    const days = buildYear(2027, { ...settings, companyDays: { '2027-03-06': 'full', '2027-05-06': 'half' } })
+    expect(day('2027-03-06', days)).toMatchObject({ kind: 'workday', restDay: true, cost: 1 })
+    expect(day('2027-05-06', days)).toMatchObject({ kind: 'workday', restDay: true, cost: 0.5, holiday: { name: 'Christi Himmelfahrt' } })
+    expect(day('2027-03-07', days)).toMatchObject({ kind: 'weekend', restDay: true, cost: 0 })
+    expect(usage(days, new Set(['2027-03-06', '2027-05-06', '2027-03-07']), settings).used).toBe(1.5)
   })
 
   it('applies the company rule for Heiligabend and Silvester separately', () => {
@@ -268,6 +276,22 @@ describe('school breaks', () => {
     expect(day('2027-08-02', days).onBreak).toEqual(['RP', 'SL', 'NW'])
     expect(day('2027-08-20', days)).toMatchObject({ onBreak: ['NW'], schoolBreak: undefined })
     expect(day('2027-08-20', days).crowd).toBeCloseTo(crowd(['NW']))
+  })
+})
+
+describe('day rules', () => {
+  const plan = { settings, booked: [], companyDays: { '2027-05-07': 'off' as const } }
+
+  it('stores a rule only while it differs from the day\'s default', () => {
+    expect(withDayRule(plan, { date: '2027-03-06', restDay: true }, 'full').companyDays).toEqual({ '2027-05-07': 'off', '2027-03-06': 'full' })
+    expect(withDayRule(plan, { date: '2027-05-07', restDay: false }, 'full').companyDays).toEqual({})
+    expect(withDayRule(plan, { date: '2027-03-06', restDay: true }, 'off')).toEqual(plan)
+  })
+
+  it('sends 24.12 and 31.12 on weekdays to their settings, and on a weekend to the company days', () => {
+    expect(withDayRule(plan, { date: '2027-12-24', restDay: false }, 'off')).toMatchObject({ settings: { christmasEve: 'off' }, companyDays: plan.companyDays })
+    expect(withDayRule(plan, { date: '2027-12-31', restDay: false }, 'half').settings.newYearsEve).toBe('half')
+    expect(withDayRule(plan, { date: '2028-12-24', restDay: true }, 'full')).toMatchObject({ settings, companyDays: { '2028-12-24': 'full' } })
   })
 })
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ISODate } from './domain/dates'
-import type { CompanyDays, DayRule, Settings } from './domain/calendar'
+import { defaultRule, type CompanyDays, type Day, type DayRule, type Settings } from './domain/calendar'
 import { REGIONS, type Region } from './domain/holidays'
 
 /** One year's settings, booked days and company days. */
@@ -49,7 +49,7 @@ function sanitize(raw: unknown, year: number): Plan | null {
     booked: booked.filter((d): d is ISODate => typeof d === 'string' && date.test(d)).sort(),
     companyDays: Object.fromEntries(
       Object.entries(companyDays && typeof companyDays === 'object' ? companyDays : {}).filter(
-        ([d, rule]) => date.test(d) && (rule === 'half' || rule === 'off'),
+        ([d, rule]) => date.test(d) && EVES.includes(rule as DayRule),
       ),
     ),
   }
@@ -69,6 +69,17 @@ function sanitizeYears(raw: unknown): Years | null {
     if (plan) years[key] = plan
   }
   return Object.keys(years).length > 0 ? years : null
+}
+
+/**
+ * A plan with a day's rule changed. 24.12 and 31.12 on weekdays go to their settings, which later years inherit;
+ * any other day goes to this year's company days, and only while it differs from the day's default.
+ */
+export function withDayRule(plan: Plan, day: Pick<Day, 'date' | 'restDay'>, rule: DayRule): Plan {
+  if (!day.restDay && day.date.endsWith('-12-24')) return { ...plan, settings: { ...plan.settings, christmasEve: rule } }
+  if (!day.restDay && day.date.endsWith('-12-31')) return { ...plan, settings: { ...plan.settings, newYearsEve: rule } }
+  const { [day.date]: _, ...rest } = plan.companyDays
+  return { ...plan, companyDays: rule === defaultRule(day) ? rest : { ...rest, [day.date]: rule } }
 }
 
 /** Every year's plan as one base64 string, to carry it to another browser. */
@@ -145,14 +156,7 @@ export function usePlan() {
         }
         return { ...p, booked: [...next].sort() }
       }),
-    /** 24.12 and 31.12 go to their settings, every other weekday to this year's company days. */
-    setDayRule: (date: ISODate, rule: DayRule) =>
-      update((p) => {
-        if (date.endsWith('-12-24')) return { ...p, settings: { ...p.settings, christmasEve: rule } }
-        if (date.endsWith('-12-31')) return { ...p, settings: { ...p.settings, newYearsEve: rule } }
-        const { [date]: _, ...rest } = p.companyDays
-        return { ...p, companyDays: rule === 'full' ? rest : { ...rest, [date]: rule } }
-      }),
+    setDayRule: (day: Pick<Day, 'date' | 'restDay'>, rule: DayRule) => update((p) => withDayRule(p, day, rule)),
     clear: () => update((p) => ({ ...p, booked: [] })),
   }
 }

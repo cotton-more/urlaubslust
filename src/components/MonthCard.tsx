@@ -1,5 +1,5 @@
 import type { PointerEvent } from 'react'
-import { hasRule, type Day } from '../domain/calendar'
+import type { Day } from '../domain/calendar'
 import type { ISODate } from '../domain/dates'
 import { WEEKDAYS, monthName } from '../format'
 import { CrowdPie } from './CrowdPie'
@@ -19,7 +19,7 @@ interface Props {
   onPress: (day: Day, event: PointerEvent) => void
   onEnter: (day: Day) => void
   onKeyToggle: (day: Day) => void
-  /** A right click (or the menu key) on a day the company decides about. */
+  /** A right click (or the menu key) on a day. */
   onMenu: (day: Day, x: number, y: number) => void
 }
 
@@ -69,26 +69,25 @@ export function MonthCard({ view, year, month, days, booked, covered, bridges, o
           const clickable = day.kind === 'workday'
           const plan = view === 'plan'
           const look = plan
-            ? `${cellClass(day, isBooked, covered.has(day.date))} ${day.elsewhere ? 'outline-1 outline-offset-[-3px] outline-dashed outline-butter-500' : ''}`
+            ? `${cellClass(day, isBooked, covered.has(day.date))} ${day.elsewhere ? 'outline-1 outline-offset-[-3px] outline-dashed outline-butter-500' : ''} ${day.holiday && clickable ? 'outline-1 outline-offset-[-3px] outline-dashed outline-sage-400' : ''}`
             : crowdClass(day, (clickable && isBooked) || covered.has(day.date))
           return (
             <button
               key={day.date}
               type="button"
-              tabIndex={hasRule(day) ? 0 : -1}
+              tabIndex={0}
               aria-pressed={clickable ? isBooked : undefined}
               aria-label={day.date}
               onPointerDown={(e) => onPress(day, e)}
               onPointerEnter={() => onEnter(day)}
               onClick={(e) => e.detail === 0 && clickable && onKeyToggle(day)}
               onContextMenu={(e) => {
-                if (!hasRule(day)) return
                 e.preventDefault()
                 // The menu key fires this without a pointer position.
                 const box = e.currentTarget.getBoundingClientRect()
                 onMenu(day, e.clientX || box.left, e.clientY || box.bottom)
               }}
-              className={`relative grid aspect-square place-items-center rounded-xl text-[13px] tabular-nums outline-none transition duration-150 select-none focus-visible:ring-2 focus-visible:ring-blush-300 ${look} ${clickable ? '' : 'cursor-default'}`}
+              className={`relative grid aspect-square place-items-center rounded-xl text-[13px] tabular-nums transition duration-150 select-none focus-visible:ring-2 focus-visible:outline-none focus-visible:ring-blush-300 ${look} ${clickable ? '' : 'cursor-default'}`}
             >
               {!plan && <CrowdPie onBreak={day.onBreak} className="absolute inset-[3px]" />}
               <span className="relative">{day.dayOfMonth}</span>

@@ -5,8 +5,11 @@ import { crowd, type SchoolBreak } from './schoolBreaks'
 /** How the company treats a weekday: a full working day, half a day, or closed. */
 export type DayRule = 'full' | 'half' | 'off'
 
-/** One year's company-specific days (a closed Brückentag, a half day before a party…), beyond 24.12 and 31.12. */
-export type CompanyDays = Partial<Record<ISODate, Exclude<DayRule, 'full'>>>
+/**
+ * One year's own rules for single days, beyond 24.12 and 31.12: a closed Brückentag, a half day before a party,
+ * or a weekend or holiday that has to be worked (a duty at the hospital, Inventur in the shop).
+ */
+export type CompanyDays = Partial<Record<ISODate, DayRule>>
 
 export interface Settings {
   /** Bundesland of the workplace (Arbeitsort): its holidays are days off. */
@@ -33,9 +36,11 @@ export interface Day {
   /** 0 = Monday … 6 = Sunday */
   weekday: number
   kind: DayKind
+  /** Weekend or legal holiday at work, before any company rule: off unless the company says otherwise. */
+  restDay: boolean
   /** Vacation days spent when this day is booked; weekends and holidays cost nothing (§ 3 BUrlG). */
   cost: number
-  /** Legal holiday at work. */
+  /** Legal holiday at work; still set when the day is worked. */
   holiday?: Holiday
   /** Legal holiday at home but not at work. */
   elsewhere?: Holiday
@@ -50,14 +55,14 @@ export interface Day {
 
 const RULE_COST: Record<DayRule, number> = { full: 1, half: 0.5, off: 0 }
 
-/** The company rule behind a weekday that is not a legal holiday. */
+/** The rule a day ends up with. */
 export function ruleOf(day: Day): DayRule {
-  return day.kind === 'company' ? 'off' : day.cost < 1 ? 'half' : 'full'
+  return day.kind !== 'workday' ? 'off' : day.cost < 1 ? 'half' : 'full'
 }
 
-/** Whether the company decides about this day: weekdays that are not legal holidays at work. */
-export function hasRule(day: Day): boolean {
-  return day.kind === 'workday' || day.kind === 'company'
+/** The rule a day has without a company day of its own: rest days are off, other days work. */
+export function defaultRule(day: Pick<Day, 'restDay'>): DayRule {
+  return day.restDay ? 'off' : 'full'
 }
 
 export function isOff(day: Day): boolean {
@@ -89,15 +94,11 @@ export function buildYear(
     const h = holidays.get(date)
     const local = h?.regions.includes(work) ? h : undefined
 
-    let kind: DayKind = 'workday'
-    let cost = 1
-    if (wd >= 5) [kind, cost] = ['weekend', 0]
-    else if (local) [kind, cost] = ['holiday', 0]
-    else {
-      const rule = companyDays[date] ?? eves.get(date) ?? 'full'
-      cost = RULE_COST[rule]
-      if (rule === 'off') kind = 'company'
-    }
+    const restDay = wd >= 5 || local !== undefined
+    const rule = companyDays[date] ?? (restDay ? 'off' : (eves.get(date) ?? 'full'))
+    // A worked rest day costs vacation like any working day: vacation frees you from a duty to work, wherever it falls.
+    const cost = RULE_COST[rule]
+    const kind: DayKind = rule !== 'off' ? 'workday' : !restDay ? 'company' : wd >= 5 ? 'weekend' : 'holiday'
 
     const current = breaks.filter((b) => b.start <= date && date <= b.end)
     const onBreak = [...new Set(current.flatMap((b) => b.regions))]
@@ -107,6 +108,7 @@ export function buildYear(
       dayOfMonth: d.getUTCDate(),
       weekday: wd,
       kind,
+      restDay,
       cost,
       holiday: local,
       elsewhere: h && !local && h.regions.includes(home) ? h : undefined,

@@ -1,6 +1,5 @@
 import { useRef, useState } from 'react'
-import { hasRule, type CompanyDays, type Day, type DayRule, type Settings } from '../domain/calendar'
-import type { ISODate } from '../domain/dates'
+import { defaultRule, type CompanyDays, type Day, type DayRule, type Settings } from '../domain/calendar'
 import { dayLabel } from '../format'
 import { RULE_LABELS } from './DayMenu'
 import { RegionSelect, Reveal, Segmented, Stepper } from './controls'
@@ -11,7 +10,7 @@ interface Props {
   settings: Settings
   companyDays: CompanyDays
   onChange: (patch: Partial<Settings>) => void
-  onDayRule: (date: ISODate, rule: DayRule) => void
+  onDayRule: (day: Day, rule: DayRule) => void
 }
 
 export function SettingsPanel({ year, days, settings, companyDays, onChange, onDayRule }: Props) {
@@ -55,8 +54,14 @@ export function SettingsPanel({ year, days, settings, companyDays, onChange, onD
             или новую работу достаточно указать в первом году, где они начинаются.
           </p>
           <p>
-            Свои дни фирмы — закрытый Brückentag, полдня перед корпоративом — задаются правым кликом по дню в
-            календаре и действуют только в этом году. 24.12 и 31.12 переходят и в следующие годы.
+            Свои дни фирмы — закрытый Brückentag, полдня перед корпоративом, дежурство в выходной или праздник —
+            задаются правым кликом по дню в календаре и действуют только в этом году. 24.12 и 31.12 переходят и в
+            следующие годы.
+          </p>
+          <p>
+            Рабочий выходной или праздник стоит отпуска, как обычный рабочий день: отпуск освобождает от работы в тот
+            день, когда ты должен был работать. Полдня — половину дня отпуска. Доплаты и отгулы за работу в праздник
+            приложение не считает.
           </p>
           <p>Остаток прошлого года нужно взять до 31 марта, иначе он сгорает (§ 7 Abs. 3 BUrlG).</p>
         </div>
@@ -88,36 +93,44 @@ function CompanyDaysList({
   year: number
   days: readonly Day[]
   companyDays: CompanyDays
-  onDayRule: (date: ISODate, rule: DayRule) => void
+  onDayRule: (day: Day, rule: DayRule) => void
 }) {
   const picker = useRef<HTMLInputElement>(null)
   const [hint, setHint] = useState<string | null>(null)
-  const entries = Object.entries(companyDays).sort(([a], [b]) => a.localeCompare(b)) as [ISODate, DayRule][]
+  const entries = days.flatMap((day) => {
+    const rule = companyDays[day.date]
+    return rule ? [{ day, rule }] : []
+  })
 
   const add = (date: string) => {
     const day = days.find((d) => d.date === date)
     if (!day) return
-    if (date.endsWith('-12-24') || date.endsWith('-12-31')) setHint('24.12 и 31.12 настраиваются выше.')
-    else if (!hasRule(day)) setHint(`${dayLabel(date)} и так выходной.`)
-    else {
-      setHint(null)
-      onDayRule(day.date, companyDays[day.date] ?? 'off')
-    }
+    if (!day.restDay && (date.endsWith('-12-24') || date.endsWith('-12-31'))) return setHint('24.12 и 31.12 настраиваются выше.')
+    setHint(null)
+    onDayRule(day, companyDays[day.date] ?? (day.restDay ? 'full' : 'off'))
   }
 
   return (
     <div className="grid gap-1.5">
       <span className="text-xs text-stone-500">Свои дни фирмы в {year}</span>
-      {entries.map(([date, rule]) => (
-        <div key={date} className="flex items-center gap-2">
-          <span className="w-24 shrink-0 text-xs font-medium text-stone-700">{dayLabel(date)}</span>
+      {entries.map(({ day, rule }) => (
+        <div key={day.date} className="flex items-center gap-2">
+          <span className="w-24 shrink-0 text-xs font-medium text-stone-700">
+            {dayLabel(day.date)}
+            {day.holiday && <span className="block truncate text-[10px] font-normal text-sage-700">{day.holiday.name}</span>}
+          </span>
           <div className="min-w-0 flex-1">
-            <Segmented<DayRule> value={rule} options={RULE_LABELS.slice(1)} onChange={(next) => onDayRule(date, next)} />
+            {/* Only the rules that differ from the day's default: a rest day can be worked, a working day shortened or closed. */}
+            <Segmented<DayRule>
+              value={rule}
+              options={day.restDay ? RULE_LABELS.slice(0, 2) : RULE_LABELS.slice(1)}
+              onChange={(next) => onDayRule(day, next)}
+            />
           </div>
           <button
             type="button"
-            aria-label={`Убрать ${dayLabel(date)}`}
-            onClick={() => onDayRule(date, 'full')}
+            aria-label={`Убрать ${dayLabel(day.date)}`}
+            onClick={() => onDayRule(day, defaultRule(day))}
             className="grid size-7 shrink-0 cursor-pointer place-items-center rounded-full text-stone-400 transition hover:bg-berry-400/10 hover:text-berry-600"
           >
             ×

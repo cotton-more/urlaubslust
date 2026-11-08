@@ -205,7 +205,7 @@ export default function App() {
         </div>
       </div>
 
-      {menu && <DayMenu {...menu} onPick={(rule) => setDayRule(menu.day.date, rule)} onClose={closeMenu} />}
+      {menu && <DayMenu {...menu} onPick={(rule) => setDayRule(menu.day, rule)} onClose={closeMenu} />}
       <HoverBar day={hovered} booked={hovered ? booked.has(hovered.date) : false} work={REGIONS[settings.work]} home={settings.home} />
     </div>
   )
@@ -343,6 +343,7 @@ function Legend({ home, view, onView }: { home: string; view: View; onView: (vie
     ['bg-linear-to-br from-blush-600 to-peach-600', 'отпуск'],
     ['bg-blush-100 ring-1 ring-inset ring-blush-200', 'выходные внутри отпуска'],
     ['bg-sage-100 ring-1 ring-inset ring-sage-300', 'праздник'],
+    ['outline-1 outline-dashed outline-sage-400', 'праздник, но рабочий'],
     ['outline-1 outline-dashed outline-butter-500', `праздник только дома (${home})`],
     ['bg-butter-500 !size-1.5 rounded-full', 'мостик'],
     ['bg-mist-500 !size-1.5 rounded-full', 'особый день'],
@@ -404,8 +405,13 @@ function HoverBar({ day, booked, work, home }: { day: Day | null; booked: boolea
     if (day.holiday) lines.push(`${day.holiday.name} — праздник в ${work}`)
     else if (day.kind === 'weekend') lines.push('выходной')
     else if (day.kind === 'company') lines.push('фирма не работает')
-    else if (booked) lines.push(`в отпуске · −${daysWord(day.cost)}`)
-    else lines.push(day.cost < 1 ? 'рабочий полдня' : 'рабочий день')
+    if (day.kind === 'workday') {
+      const half = day.cost < 1
+      if (booked) lines.push(`в отпуске · −${daysWord(day.cost)}`)
+      else if (day.holiday) lines.push(half ? 'но ты работаешь полдня' : 'но ты работаешь')
+      else if (day.restDay) lines.push(half ? 'рабочий выходной, полдня' : 'рабочий выходной')
+      else lines.push(half ? 'рабочий полдня' : 'рабочий день')
+    }
     if (day.elsewhere) lines.push(`${day.elsewhere.name} — праздник дома (${home}), но не на работе`)
     if (day.observance && !day.holiday) lines.push(`${day.observance.name}: ${day.observance.note}`)
     if (day.schoolBreak) lines.push(`${day.schoolBreak.name} в школах ${home}`)
