@@ -30,16 +30,20 @@ function cellClass(day: Day, booked: boolean, covered: boolean): string {
     return 'bg-linear-to-br from-blush-600 to-peach-600 text-white font-bold shadow-md shadow-blush-600/30 scale-[1.04]'
   if (covered)
     return day.kind === 'weekend' ? 'bg-blush-100 text-blush-700' : 'bg-blush-100 text-sage-700 font-semibold'
-  if (day.kind === 'holiday' || day.kind === 'company') return 'bg-sage-100 text-sage-700 font-semibold ring-1 ring-inset ring-sage-300'
+  if (day.kind === 'holiday') return 'bg-sage-100 text-sage-700 font-semibold ring-1 ring-inset ring-sage-300'
+  if (day.kind === 'company') return 'hatch text-sage-700 font-semibold ring-1 ring-inset ring-sage-300'
   if (day.kind === 'weekend') return 'text-stone-400'
-  return 'text-stone-700 hover:bg-blush-100 hover:text-blush-700 cursor-pointer'
+  const half = day.cost < 1 ? 'half-shade ring-1 ring-inset ring-sage-300/60' : ''
+  return `${half} text-stone-700 hover:bg-blush-100 hover:text-blush-700 cursor-pointer`
 }
 
 function crowdClass(day: Day, inTrip: boolean): string {
   const ink =
-    day.kind === 'holiday' || day.kind === 'company'
+    day.kind === 'holiday'
       ? 'bg-sage-100 text-sage-700 font-semibold'
-      : day.kind === 'weekend'
+      : day.kind === 'company'
+        ? 'hatch text-sage-700 font-semibold'
+        : day.kind === 'weekend'
         ? 'text-stone-500'
         : 'text-stone-800 cursor-pointer'
   return `${ink} ${inTrip ? 'ring-2 ring-inset ring-blush-600 font-bold' : ''}`

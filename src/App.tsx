@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import { Disclosure, DisclosureButton, DisclosurePanel, Popover, PopoverButton, PopoverPanel } from '@headlessui/react'
-import { buildYear, isOff, type Day } from './domain/calendar'
+import { buildYear, defaultRule, isOff, ruleOf, type Day } from './domain/calendar'
 import type { ISODate } from './domain/dates'
 import { REGIONS } from './domain/holidays'
 import { POPULATION, type SchoolBreak } from './domain/schoolBreaks'
@@ -387,6 +387,8 @@ function Legend({ home, view, onView }: { home: string; view: View; onView: (vie
     ['bg-linear-to-br from-blush-600 to-peach-600', 'отпуск'],
     ['bg-blush-100 ring-1 ring-inset ring-blush-200', 'выходные внутри отпуска'],
     ['bg-sage-100 ring-1 ring-inset ring-sage-300', 'праздник'],
+    ['hatch ring-1 ring-inset ring-sage-300', 'выходной фирмы'],
+    ['half-shade ring-1 ring-inset ring-sage-300', 'полдня'],
     ['outline-1 outline-dashed outline-sage-400', 'праздник, но рабочий'],
     ['outline-1 outline-dashed outline-butter-500', `праздник только дома (${home})`],
     ['bg-butter-500 !size-1.5 rounded-full', 'мостик'],
@@ -438,7 +440,11 @@ function Legend({ home, view, onView }: { home: string; view: View; onView: (vie
                 </li>
                 <li className="flex items-center gap-2.5">
                   <span className="size-3 rounded bg-sage-100 ring-1 ring-sage-300 ring-inset" />
-                  праздник / фирма не работает
+                  праздник
+                </li>
+                <li className="flex items-center gap-2.5">
+                  <span className="hatch size-3 rounded ring-1 ring-sage-300 ring-inset" />
+                  выходной фирмы
                 </li>
                 <li className="flex items-center gap-2.5">
                   <span className="rounded-sm bg-butter-100 px-0.5 text-[8px] leading-[10px] font-bold text-butter-800">½</span>
@@ -471,7 +477,7 @@ function HoverBar({ day, booked, work, home }: { day: Day | null; booked: boolea
   if (day) {
     if (day.holiday) lines.push(`${day.holiday.name} — праздник в ${work}`)
     else if (day.kind === 'weekend') lines.push('выходной')
-    else if (day.kind === 'company') lines.push('фирма не работает')
+    else if (day.kind === 'company') lines.push('выходной фирмы')
     if (day.kind === 'workday') {
       const half = day.cost < 1
       if (booked) lines.push(`в отпуске · −${daysWord(day.cost)}`)
@@ -479,6 +485,8 @@ function HoverBar({ day, booked, work, home }: { day: Day | null; booked: boolea
       else if (day.restDay) lines.push(half ? 'рабочий выходной, полдня' : 'рабочий выходной')
       else lines.push(half ? 'рабочий полдня' : 'рабочий день')
     }
+    // A rule of the company's own, not the law: say where it comes from and how to change it.
+    if (ruleOf(day) !== defaultRule(day)) lines.push('правило фирмы · правый клик — изменить')
     if (day.elsewhere) lines.push(`${day.elsewhere.name} — праздник дома (${home}), но не на работе`)
     if (day.observance && !day.holiday) lines.push(`${day.observance.name}: ${day.observance.note}`)
     if (day.schoolBreak) lines.push(`${day.schoolBreak.name} в школах ${home}`)
